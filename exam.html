@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Online MCQ Examination Sytem </title>
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, getDocs, getDoc, onSnapshot, deleteDoc, query, where, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+
+  import { getStorage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+  
+  const firebaseConfig = {
+    apiKey: "AIzaSyC7X0B65qfWiSkSaC_-dXElw687ZmVM9gU",
+    authDomain: "exam-system-2ed90.firebaseapp.com",
+    projectId: "exam-system-2ed90",
+    storageBucket: "exam-system-2ed90.appspot.com",
+    messagingSenderId: "576581410555",
+    appId: "1:576581410555:web:e38cea3f14d10e5daa5a5e",
+    measurementId: "G-BCFKVMVTBE"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  window.db = getFirestore(app);
+  window.storage = getStorage(app);
+
+  // ✅ Expose Firestore helpers globally
+   // ✅ Expose Firestore helpers globally (make sure module-level imports are available to non-module callers)
+ window.setDoc = setDoc;
+window.addDoc = addDoc;          // <-- added
+window.updateDoc = updateDoc;    // <-- added
+window.getDoc = getDoc;
+window.getDocs = getDocs;
+window.doc = doc;
+window.collection = collection;
+window.onSnapshot = onSnapshot;
+// Expose query helpers used by admin visitor message UI and delete routines
+window.deleteDoc = deleteDoc;
+window.query = query;
+window.where = where;
+window.orderBy = orderBy;
+
+
+  /* ------------------------
+   Announcements (Admin -> All users)
+   ------------------------ */
+
+// helper: clear textarea
+function clearAnnouncementBox(){ $('#adminAnnText').value = ''; }
+
+// Send announcement to Firestore (timestamp-id to keep ordering)
+async function sendAnnouncement(){
+  const text = ($('#adminAnnText').value || '').trim();
+  if(!text) return alert('Enter a message to send.');
+  try {
+    const author = (window.currentAdmin || window.ADMIN_NAME || 'admin');
+    const id = String(Date.now()) + '-' + Math.random().toString(36).slice(2,8);
+    const payload = {
+      text,
+      author,
+      createdAt: Date.now(),
+      deleted: false
+    };
+    await setDoc(doc(db, "announcements", id), payload);
+    $('#adminAnnText').value = '';
+    alert('✅ Announcement sent.');
+  } catch (err) {
+    console.error('Failed to send announcement:', err);
+    alert('❌ Failed to send (see console).');
+  }
+}
+
+// Soft-delete (admin) — mark announcement deleted so it won't be shown to students
+async function deleteAnnouncement(id){
+  if(!confirm('Delete this announcement?')) return;
+  try {
+    await setDoc(doc(db, "announcements", id), { deleted: true, deletedAt: Date.now() }, { merge: true });
+    alert('Deleted.');
+  } catch (err) {
+    console.error('deleteAnnouncement error', err);
+    alert('Failed to delete (see console).');
+  }
+}
+
+// Admin: render live announcement list (real-time)
+function renderAdminAnnouncementsLive(){
+  try {
+    const colRef = collection(db, "announcements");
+    // real-time updates
+    onSnapshot(colRef, snap => {
+      const out = $('#adminAnnList');
+      if (!out) {
+        console.warn('renderAdminAnnouncementsLive: #adminAnnList not found in DOM');
+        return;
+      }
+      out.innerHTML = '';
+
+      // build array to sort by createdAt desc
+      const arr = [];
+      snap.forEach(d => {
+        // d may be a DocumentSnapshot
+        const data = (typeof d.data === 'function') ? d.data() : (d.data || {});
+        if (!data) return;
+        arr.push({ id: d.id, ...data });
+      });
+
+      // sort by createdAt (desc)
+      arr.sort((a,b) => (Number(b.createdAt || 0) - Number(a.createdAt || 0)));
+
+      if (arr.length === 0) {
+        out.innerHTML = '<div class="small">No announcements yet.</div>';
+        return;
+      }
+
+      arr.forEach(a => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'list-item';
+        wrapper.style.display = 'flex';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.justifyContent = 'space-between';
+
+        // safe text rendering
+        const author = escapeHTML(a.author || 'admin');
+        const text = escapeHTML(a.text || '');
+        const when = a.createdAt ? new Date(Number(a.createdAt)).toLocaleString() : '';
+
+        wrapper.innerHTML = `
+          <div style="flex:1">
+            <div style="font-weight:700">${author} <span style="font-weight:400;font-size:12px;color:var(--muted)"> • ${when}</span></div>
+            <div style="margin-top:6px;white-space:pre-wrap">${text}</div>
+            ${a.deleted ? '<div style="color:var(--danger);font-size:12px;margin-top:4px">Deleted</div>' : ''}
+          </div>
+          <div style="margin-left:8px;white-space:nowrap">
+            ${a.deleted ? '' : `<button class="btn" onclick="deleteAnnouncement('${a.id}')">Delete</button>`}
+          </div>
+        `;
+
+        out.appendChild(wrapper);
+      });
+    }, err => {
+      console.warn('renderAdminAnnouncementsLive onSnapshot error:', err);
+      const out = $('#adminAnnList');
+      if (out) out.innerHTML = '<div class="small">Failed to load announcements (see console).</div>';
+    });
+  } catch (e) {
+    console.warn('renderAdminAnnouncementsLive error', e);
+  }
+}
+
+
+// Student-side: listen for the latest announcement and update top banner in real-time
+// helper: normalize Firestore timestamp (returns milliseconds number)
+function _normalizeTs(ts){
+  if (!ts) return 0;
+  if (typeof ts.toMillis === 'function') return ts.toMillis();
+  if (ts.seconds) return Number(ts.seconds) * 1000;
+  const n = Number(ts);
+  return isNaN(n) ? 0 : n;
+}
+// -------- realtime sessions listener -----------
+let SESSIONS_ONSNAP_UNSUB = null;
+
+// Start real-time listener for sessions collection (idempotent)
+function startSessionsRealtimeListener() {
+  try {
+    if (typeof onSnapshot !== 'function' || typeof collection !== 'function' || typeof db === 'undefined') {
+      console.warn('startSessionsRealtimeListener: Firestore helpers not available');
+      return;
+    }
+    if (SESSIONS_ONSNAP_UNSUB) return; // already listening
+
+    const colRef = collection(db, "sessions");
+    SESSIONS_ONSNAP_UNSUB = onSnapshot(colRef, snap => {
+      // simply re-render the admin list when sessions change
+      if (typeof renderSessionsAdmin === 'function') {
+        renderSessionsAdmin().catch(err => console.warn('renderSessionsAdmin error', err));
+      }
+    }, err => {
+      console.warn('sessions onSnapshot error:', err);
+    });
+
+    console.log('✅ Sessions realtime listener started');
+  } catch (err) {
+    console.warn('startSessionsRealtimeListener error:', err);
+  }
+}
+
+// Stop the realtime listener (if any)
+function stopSessionsRealtimeListener() {
+  try {
+    if (SESSIONS_ONSNAP_UNSUB) {
+      SESSIONS_ONSNAP_UNSUB(); // unsubscribe
+      SESSIONS_ONSNAP_UNSUB = null;
+      console.log('✅ Sessions realtime listener stopped');
+    }
+  } catch (err) {
+    console.warn('stopSessionsRealtimeListener error:', err);
+  }
+}
+
+// helper to update home page banner (create minimal animation)
+function updateHomeAnnouncement(msg){
+  const el = document.getElementById('homeAnnouncement');
+  if(!el) return;
+  if(msg && msg.length){
+    el.textContent = msg;
+    el.style.display = 'block';
+    el.style.transition = 'transform 220ms ease, background 300ms ease, opacity 220ms ease';
+    el.style.transform = 'scale(1.01)';
+    el.style.opacity = '1';
+    setTimeout(()=> el.style.transform = 'scale(1)', 220);
+  } else {
+    el.style.opacity = '0';
+    setTimeout(()=> { if(el) el.style.display = 'none'; }, 240);
+  }
+}
+
+function startAnnouncementsListenerForStudents(){
+  try {
+    const colRef = collection(db, "announcements");
+    onSnapshot(colRef, snap => {
+      let latest = null;
+      snap.forEach(d => {
+        const data = d.data();
+        if(!data) return;
+        if(data.deleted) return; // ignore deleted
+
+        const createdNum = _normalizeTs(data.createdAt);
+        if(!latest || createdNum > (latest._createdAtNum || 0)) {
+          const data = d.data ? d.data() : (d.data || {});
+latest = { id: d.id, ...data, _createdAtNum: createdNum };
+
+        }
+      });
+
+      if(latest && latest.text) {
+        // Update existing top banner text
+        const banner = document.getElementById('examMsg');
+        if(banner) {
+          banner.textContent = latest.text;
+          // small pulse animation: briefly change background to highlight
+          banner.style.transition = 'background 300ms ease';
+          banner.style.background = '#1f2937';
+          setTimeout(()=> banner.style.background = '', 800);
+        } else {
+          // fallback: create a quick banner with existing helper if available
+          if(typeof showAnnouncement === 'function'){
+            showAnnouncement(latest.text);
+          } else {
+            console.log('Announcement:', latest.text);
+          }
+        }
+
+        // Also update the home/sign-in banner (if present)
+        updateHomeAnnouncement(latest.text);
+      } else {
+        // No valid latest announcement found — hide home banner if present
+        updateHomeAnnouncement('');
+      }
+    });
+  } catch (err) {
+    console.warn('startAnnouncementsListenerForStudents error:', err);
+  }
+}
+
+
+// small helper used in fallback (if present in your file)
+function showAnnouncement(msg){
+  const el = document.getElementById('examMsg');
+  if(el) { el.textContent = msg; return; }
+  // fallback: prepend simple banner
+  let banner = document.getElementById('examMsg');
+  if(!banner) {
+    banner = document.createElement('div');
+    banner.id = 'examMsg';
+    banner.style.cssText = 'width:100%;padding:8px;text-align:center;font-weight:bold;background:#222;color:#fff;position:fixed;top:0;left:0;z-index:99999';
+    document.body.prepend(banner);
+  }
+  banner.textContent = msg;
+}
+
+/* Start listeners where appropriate:
+   - Call renderAdminAnnouncementsLive() once after admin login (or on admin page load)
+   - Call startAnnouncementsListenerForStudents() during app init (so students get messages)
+*/
+
+// e.g. call when admin panel is shown
+window.renderAdminAnnouncementsLive = renderAdminAnnouncementsLive;
+window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStudents;
+  
+// --- expose announcement functions to global scope ---
+window.sendAnnouncement = sendAnnouncement;
+window.clearAnnouncementBox = clearAnnouncementBox;
+window.deleteAnnouncement = deleteAnnouncement;
+window.renderAdminAnnouncementsLive = renderAdminAnnouncementsLive;
+window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStudents;
+</script>
+ <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <!-- ========== HOME / SIGN IN PAGE (NEW) ========== -->
+<section id="home" style="position:fixed;inset:0;background:#3b78b5;display:flex;align-items:center;justify-content:center;z-index:9998;">
+  <button id="homeAdminBtn" style="position:fixed;top:28px;right:34px;padding:10px 18px;border-radius:8px;border:2px solid rgba(255,255,255,0.85);background:transparent;color:white;font-weight:700;cursor:pointer;z-index:10000;">
+    Admin
+  </button>
+
+  <div style="width:720px;max-width:92vw;border-radius:10px;padding:36px 40px 46px;box-sizing:border-box;
+              background:linear-gradient(180deg,#3fb1d9 0%,#2b62a3 100%);border:2px solid rgba(255,255,255,0.6);
+              box-shadow:0 30px 70px rgba(0,0,0,0.25);text-align:center;color:rgba(255,255,255,0.95);">
+    <div style="width:86px;height:86px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin:6px auto 10px;border:3px solid rgba(255,255,255,0.6);background: rgba(255,255,255,0.06);">
+      <!-- user icon -->
+      <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:46px;height:46px;opacity:0.95">
+        <circle cx="32" cy="24" r="12" fill="white" fill-opacity="0.95" />
+        <path d="M10 54c0-10 12-18 22-18s22 8 22 18" fill="white" fill-opacity="0.95" />
+      </svg>
+    </div>
+
+    <h1 style="margin:8px 0 24px;font-weight:400;font-size:34px;letter-spacing:1px">Sign in</h1>
+
+    <div style="width:100%;max-width:560px;margin:6px auto;display:flex;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid rgba(255,255,255,0.6);">
+      <div style="width:30px;opacity:0.85;">
+        <!-- username icon -->
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      </div>
+      <input id="homeUsername" type="text" placeholder="Username" style="flex:1;background:transparent;border:0;outline:none;padding:10px 6px;color:rgba(255,255,255,0.95);font-size:16px" />
+    </div>
+
+    <div style="width:100%;max-width:560px;margin:18px auto 0;display:flex;align-items:center;gap:12px;padding:10px 6px;border-bottom:1px solid rgba(255,255,255,0.6);">
+      <div style="width:30px;opacity:0.85;">
+        <!-- password icon -->
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      </div>
+      <input id="homePassword" type="password" placeholder="Password" style="flex:1;background:transparent;border:0;outline:none;padding:10px 6px;color:rgba(255,255,255,0.95);font-size:16px" />
+    </div>
+
+    <div style="margin-top:22px">
+      <button id="homeLoginBtn" style="background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.06)); border:2px solid rgba(255,255,255,0.85); padding:12px 36px; border-radius:8px; font-size:18px; font-weight:600; cursor:pointer;">
+        Login
+      </button>
+      <!-- paste inside <section id="home"> somewhere near the top -->
+<div id="homeAnnouncement"
+     style="display:none; z-index:10002; max-width:1100px; margin:12px auto 0; padding:8px 12px;
+            background:#072b4a; color:#fff; text-align:center; border-radius:8px; font-weight:700;">
+</div>
+      <!-- Optional camera preview (Enable camera button) -->
+<div id="homeCameraWrap" style="margin-top:12px;display:flex;gap:12px;align-items:center;justify-content:center">
+  <button id="enableCameraBtn" class="btn" style="padding:10px 14px;border-radius:8px;">Enable Camera (Optional)</button>
+  <button id="stopCameraBtn" class="btn hidden" style="padding:10px 14px;border-radius:8px;">Stop Camera</button>
+
+  <!-- preview container: hidden until permission granted -->
+  <div id="cameraPreviewContainer" style="display:none; margin-left:8px;">
+    <video id="homeCameraPreview" autoplay playsinline muted style="width:160px; height:120px; border-radius:8px; object-fit:cover; border:2px solid rgba(255,255,255,0.12)"></video>
+  </div>
+</div>
+<!-- Screen sharing controls -->
+<div id="homeScreenShareWrap" style="margin-top:12px;display:flex;gap:12px;align-items:center;justify-content:center">
+  <button id="enableScreenShareBtn" class="btn" style="padding:10px 14px;border-radius:8px;">Enable Screen Share (Optional)</button>
+  <button id="stopScreenShareBtn" class="btn hidden" style="padding:10px 14px;border-radius:8px;">Stop Screen Share</button>
+
+  <!-- preview container -->
+  <div id="screenSharePreviewContainer" style="display:none; margin-left:8px;">
+    <video id="homeScreenSharePreview" autoplay playsinline muted style="width:200px; height:120px; border-radius:8px; object-fit:contain; border:2px solid rgba(255,255,255,0.12); background:black"></video>
+  </div>
+</div>
+      <div style="font-size:13px;opacity:0.9;margin-top:8px">Made by Ranjan Ray.</div>
+    </div>
+  </div>
+</section>
+<!-- ========== END HOME ========== -->
+
+<div class="wrap card">
+  <div class="header">
+    <div>
+      <div class="brand" id="examHeader">
+  <!-- filled by JS -->
+</div>
+
+      <div class="hint">Offline • localStorage • Import/Export • Admin results</div>
+    </div>
+    <div class="row">
+      <button class="btn brand" onclick="showSection('user')">User</button>
+      <button class="btn" onclick="showSection('adminLogin')">Admin Login</button>
+    </div>
+  </div>
+
+  <!-- USER SECTION -->
+  <section id="user">
+    <div class="card">
+      <h3>User Login / Register</h3>
+      <div class="row" style="gap:12px">
+        <div style="flex:1">
+          <label>Username</label>
+          <input id="userName" class="input" type="text" placeholder="username (e.g. rahul)">
+        </div>
+        <div style="width:220px">
+          <label>Photo (first-time)</label>
+          <input id="userPhoto" type="file" accept="image/*">
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div style="flex:1">
+          <label>Password</label>
+          <input id="userPass" type="password">
+        </div>
+        <div style="width:160px;align-self:end">
+          <button class="btn brand" onclick="handleUserLogin()">Login / Register</button>
+        </div>
+      </div>
+      <div class="small" style="margin-top:8px">If username exists, enter the same password to login. New users must upload photo to register.</div>
+    </div>
+
+        <div style="height:12px"></div>
+    <!-- Quick import/export hidden from user view (moved to admin) -->
+    <div class="card hidden" id="quickImportCard">
+      <h3>Quick Import / Export</h3>
+      <div class="row">
+        <button class="btn" onclick="triggerImportUsers()">Import Users (.json)</button>
+        <button class="btn" onclick="triggerImportQuestions()">Import Questions (.json)</button>
+        <div class="spacer"></div>
+        <button class="btn" onclick="exportUsers()">Export Users (.json)</button>
+        <button class="btn" onclick="exportQuestions()">Export Questions (.json)</button>
+      </div>
+      <div class="small" style="margin-top:8px">App auto-loads previously stored users & questions on page load.</div>
+    </div>
+
+  </section>
+
+  <!-- IMPORT / EXPORT -->
+  <section id="import" class="hidden">
+    <div class="card">
+      <h3>Import / Export</h3>
+      <div class="row">
+        <div style="flex:1">
+          <label>Import Users (JSON file with array of {username,password,photo})</label>
+          <input id="impUsersFile" type="file" accept="application/json" onchange="importUsersFile(event)">
+        </div>
+        <div style="width:220px">
+          <label>Import Questions (.json)</label>
+          <input id="impQFile" type="file" accept="application/json" onchange="importQuestionsFile(event)">
+        </div>
+      </div>
+<div style="height:12px"></div>
+<div class="row">
+  <button class="btn" onclick="exportSettings()">Export Exam Settings (.json)</button>
+  <button class="btn" onclick="triggerImportSettings()">Import Exam Settings (.json)</button>
+  <input id="impSettingsFile" type="file" accept="application/json" onchange="importSettingsFile(event)" style="display:none">
+</div>
+
+      <div style="height:12px"></div>
+    <div class="row">
+  <button class="btn" onclick="exportUsers()">Export Users (.json)</button>
+  <button class="btn" onclick="exportQuestions()">Export Questions (.json)</button>
+  <div class="spacer"></div>
+  <button class="btn warn" onclick="downloadBackup()">Download Full Backup (.json)</button>
+  <button class="btn" onclick="updateBackup()">Update Full Backup</button> <!-- ✅ new -->
+</div>
+
+
+<div class="row" style="margin-top:10px">
+  <label class="btn">
+    Import Full Backup (.json)
+    <input type="file" id="importBackupFile" accept="application/json"
+           style="display:none"
+           onchange="importFullBackup(this.files[0])">
+  </label>
+</div>
+
+<div class="small" style="margin-top:8px">
+  Photos must be base64 data URLs in the users JSON to be portable (we export that way).
+</div>
+</section>
+
+  <!-- ADMIN LOGIN -->
+  <section id="adminLogin" class="hidden">
+    <div class="card">
+      <h3>Admin Login</h3>
+      <label>Admin password</label>
+      <input id="adminPass" type="password" value="">
+      <div class="row" style="margin-top:10px">
+        <button class="btn brand" onclick="handleAdminLogin()">Login</button>
+        <div class="spacer"></div>
+        <div class="small">Made by: <b>Ranjan Kumar</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ADMIN PANEL (visible after login) -->
+<section id="adminPanel" class="hidden">
+<!-- add this inside adminPanel, e.g. right after <section id="adminPanel"...> -->
+<div style="margin-bottom:10px;">
+  <button class="btn" onclick="showSection('import')">Import / Export (Admin)</button>
+</div>
+  <div class="card" style="margin-top:20px">
+  <h3>🎥 Live Sessions</h3>
+  <div id="sessionsList" class="list">
+    <div class="small">No active sessions</div>
+  </div>
+</div>
+
+<!-- START: Live Proctor Card (insert inside #adminPanel) -->
+<div class="card" id="liveProctorCard" style="margin-top:12px;">
+  <h3>Live Proctor</h3>
+  <div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap">
+    <div style="flex:1;min-width:280px;">
+      <!-- Admin will see user's remote/media stream here -->
+      <video id="adminRemoteVideo" autoplay playsinline controls style="width:100%;height:320px;background:#000;border-radius:8px;border:2px solid var(--brand)"></video>
+    </div>
+    <div style="width:260px">
+      <label>Watch user (username)</label>
+      <input id="adminWatchUsername" type="text" placeholder="username (e.g. rahul)" style="width:100%;padding:8px;border-radius:8px;margin-top:6px">
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button class="btn brand" id="adminWatchStartBtn">Start Watching</button>
+        <button class="btn danger" id="adminWatchStopBtn">Stop</button>
+      </div>
+      <div id="adminWatchStatus" class="small" style="margin-top:8px"></div>
+      <div class="small" style="margin-top:10px">Tip: Click a session in the sessions list and paste the username here, or type it manually.</div>
+    </div>
+  </div>
+</div>
+<!-- END: Live Proctor Card -->
+
+
+  <!-- Exam Settings Card -->
+<button onclick="resetSettings()">🔄 Reset Settings</button>
+<label>Logo</label>
+<input id="adminLogo" type="file" accept="image/*">
+<img id="logoPreview" style="max-height: 80px; display:none;" alt="Logo preview">
+
+
+<label>Author</label>
+<input id="adminAuthor" type="text" placeholder="e.g. Ranjan Kumar">
+
+<label>College Name</label>
+<input id="adminCollege" type="text" placeholder="e.g. Regional College of Pharmaceutical Sciences">
+
+<label>Subject</label>
+<input id="adminSubject" type="text" placeholder="e.g. Computer Applications in Pharmacy">
+
+<label>Subject Code</label>
+<input id="adminSubjectCode" type="text" placeholder="e.g. BP210P">
+
+<label>Full Marks</label>
+<input id="adminFullMarks" type="number" min="0" placeholder="e.g. 20">
+
+<label style="margin-top:8px">Synopsis Questions</label>
+<input id="adminCountSynopsis" type="number" min="0" value="2" oninput="updateQuestionPreview()"/>
+
+<label style="margin-top:8px">Minor Practical Questions</label>
+<input id="adminCountMinor" type="number" min="0" value="2" oninput="updateQuestionPreview()"/>
+
+<label style="margin-top:8px">Major Practical Questions</label>
+<input id="adminCountMajor" type="number" min="0" value="1" oninput="updateQuestionPreview()"/>
+
+<label style="margin-top:8px">Viva Questions</label>
+<input id="adminCountViva" type="number" min="0" value="2" oninput="updateQuestionPreview()"/>
+
+
+<div id="questionPreview" class="small" style="margin-top:8px; font-weight:bold; color:#2563eb;">
+  Total Questions: 0
+</div>
+
+  <div class="card">
+    <h3>Exam Settings</h3>
+<!-- Resume controls -->
+<label style="margin-top:8px">
+  <input type="checkbox" id="adminResumeEnabled"> Enable Resume (allow users to resume after refresh/close)
+</label>
+
+<label style="margin-top:8px">
+  Max Resume / Refreshes allowed per user
+</label>
+<input id="adminMaxResumes" type="number" min="0" value="2"/>
+
+<div class="small" style="margin-top:6px">
+  When resume is enabled, the system saves session state periodically and allows users to resume. If a user refreshes/closes more than the allowed number, further starts/resumes are blocked.
+</div>
+    <label>Exam Duration (minutes)</label>
+<label style="margin-top:8px">Number of Questions</label>
+<label style="margin-top:8px">
+  <input type="checkbox" id="adminShuffle"> Shuffle Questions
+</label>
+<label style="margin-top:8px">
+  <input type="checkbox" id="adminAllowAfterTime"> Allow answering after time ends
+</label>
+
+<input id="adminTotalQs" type="number" min="1" value="10" placeholder="e.g. Total Question"/>
+    <input id="adminDuration" type="number" min="1" value="30" placeholder="e.g. Exam Duration" />
+<label style="margin-top:8px">Custom Exam Message</label>
+  <input id="adminCustomMsg" type="text" value="📢 Welcome to your exam! Stay calm, focus, and do your best, Made by Ranjan Kumar 🚀"/>
+    <div class="row" style="margin-top:8px">
+      <button class="btn brand" onclick="saveExamSettings()">Save Settings</button>
+    </div>
+    <div class="small">This duration will apply to all new exams.</div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <!-- Question Bank Card -->
+  <div class="card">
+    <div class="row" style="align-items:flex-start">
+      <div style="flex:1">
+        <h3>Question Bank — Add / Edit</h3>
+        <label>Category</label>
+        <select id="qCategory">
+          <option>Synopsis</option>
+          <option>Minor Practical</option>
+          <option>Major Practical</option>
+          <option>Viva</option>
+        </select>
+        <label style="margin-top:8px">Question</label>
+        <textarea id="qText"></textarea>
+        <label>Option A</label><input id="qA" type="text"/>
+        <label>Option B</label><input id="qB" type="text"/>
+        <label>Option C</label><input id="qC" type="text"/>
+        <label>Option D</label><input id="qD" type="text"/>
+        <div class="row" style="margin-top:8px;align-items:center">
+          <div style="width:160px">
+            <label>Correct answer</label>
+            <select id="qAnswer">
+              <option value="0">A</option>
+              <option value="1">B</option>
+              <option value="2">C</option>
+              <option value="3">D</option>
+            </select>
+          </div>
+          <div style="width:120px">
+            <label>Marks</label>
+            <input id="qMarks" type="number" min="1" value="1"/>
+          </div>
+          <div class="spacer"></div>
+          <button class="btn brand" onclick="saveQuestion()">Save</button>
+          <button class="btn danger" onclick="cancelEdit()">Cancel</button>
+        </div>
+      </div>
+
+      <div style="width:420px;min-width:280px">
+        <h3>Questions</h3>
+        <div id="questionsList" class="list"></div>
+        <div style="margin-top:8px" class="row">
+          <input type="file" id="importFileInput" accept=".json" style="display:none" />
+<button class="btn warn" onclick="document.getElementById('importFileInput').click()">Import Questions (.json)</button>
+          <button class="btn" onclick="exportQuestions()">Export questions (.json)</button>
+          <button class="btn danger" onclick="clearAllQuestions()">Delete All</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <!-- Users Card -->
+  <div class="card">
+    <h3>Users</h3>
+    <div class="row">
+      <div style="flex:1">
+        <label>Username</label><input id="adminNewUser" type="text"/>
+<label>Full Name</label><input id="adminNewFull" type="text"/>
+        <label>Password</label><input id="adminNewPass" type="text"/>
+        <label>Photo</label><input id="adminNewPhoto" type="file" accept="image/*"/>
+        <div class="row" style="margin-top:8px">
+          <button class="btn brand" onclick="adminCreateUser()">Create / Update</button>
+          <button class="btn danger" onclick="adminClearUsers()">Delete All Users</button>
+        </div>
+      </div>
+      <div style="width:360px">
+        <h4>Existing Users</h4>
+        <div id="adminUsersList" class="list"></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:12px"></div>
+
+  <!-- Results Card -->
+  <div class="card">
+    <h3>Results</h3>
+    <div class="row">
+      <button class="btn" onclick="renderResults()">Refresh</button>
+      <button class="btn" onclick="exportResultsJSON()">Export results (.json)</button>
+      <button class="btn" onclick="triggerImportResults()">Import results (.json)</button>
+      <button class="btn" onclick="exportResultsCSV()">Export results (.csv)</button>
+      <div class="spacer"></div>
+      <button class="btn danger" onclick="clearResults()">Clear Results</button>
+    </div>
+    <input id="impResultsFile" type="file" accept="application/json" multiple onchange="importResultsFile(event)" style="display:none">
+    <div id="resultsArea" style="margin-top:10px; max-height:360px; overflow:auto"></div>
+  </div>
+<!-- Announcements / Live Chat (Admin → All users) -->
+<div class="card" id="adminAnnouncementsCard" style="margin-top:12px; display:block;">
+  <h3>Announcements — Broadcast to all students</h3>
+  <label>Write announcement</label>
+  <textarea id="adminAnnText" placeholder="Type message to broadcast (short)"></textarea>
+  <div class="row" style="margin-top:8px">
+    <button class="btn brand" onclick="sendAnnouncement()">Send to all</button>
+    <button class="btn" onclick="clearAnnouncementBox()">Clear</button>
+    <div class="spacer"></div>
+    <div class="small">Messages appear in students' top banner instantly.</div>
+  </div>
+
+  <div style="height:8px"></div>
+  <label>Recent announcements</label>
+  <div id="adminAnnList" class="list" style="max-height:180px; overflow:auto">
+    <div class="small">No announcements yet.</div>
+  </div>
+</div>
+<div class="card" id="adminVisitorsCard" style="margin-top:12px;">
+  <h3>Visitors (before login)</h3>
+  <button class="btn" onclick="renderVisitorsAdmin()">Refresh</button>
+  <div id="adminVisitorsList" class="list" style="margin-top:10px; max-height:260px; overflow:auto">
+    <div class="small">No visitors yet.</div>
+  </div>
+</div>
+</section>
+<!-- Live Sessions (Admin) -->
+<div class="card" id="adminSessionsCard" style="margin-top:12px; display:none">
+  <h3>Live Sessions — Who is giving exam?</h3>
+  <div class="row" style="gap:8px;align-items:center">
+    <button class="btn" onclick="renderSessionsAdmin()">Refresh</button>
+    <label style="margin-left:8px">
+      <input type="checkbox" id="adminAutoRefreshSessions"> Auto-refresh every 5s
+    </label>
+    <div class="spacer"></div>
+    <button class="btn danger" onclick="clearAllSessions()">Clear All Sessions</button>
+  </div>
+
+  <div id="adminSessionsList" class="list" style="margin-top:10px; max-height:320px; overflow:auto">
+    <!-- Filled by JS -->
+    <div class="small">No sessions loaded. Click Refresh.</div>
+  </div>
+  <div class="small" style="margin-top:8px">Shows active/persisted session state saved in Firestore 'sessions' collection.</div>
+</div>
+
+
+  <div style="height:12px"></div>
+  <div class="small">Tip: All data stored locally in this browser. Use export/import to move data between machines.</div>
+</div>
+
+<!-- Fullscreen exam -->
+<div id="examFullscreen">
+<!-- Instructions Overlay -->
+<div id="examInstructionsOverlay" 
+     style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; 
+            background:rgba(0,0,0,0.9); z-index:10000;">
+  <div style="max-width:700px; background:#0b1a2b; padding:20px; border-radius:12px; 
+              color:#e6eef8; text-align:left; box-shadow:0 0 25px rgba(0,0,0,0.6)">
+    <h2 style="text-align:center; color:#60a5fa;">📘 Exam Instructions</h2>
+    <ul style="margin-top:12px; line-height:1.6;">
+      <li>✅ Stay in fullscreen mode during the exam. Exiting will pause the test.</li>
+      <li>✅ Do not refresh or close the browser during the exam.</li>
+      <li>✅ Use the navigation buttons to move between questions.</li>
+      <li>✅ You may flag questions for review before submission.</li>
+      <li>✅ Timer will count down automatically. Submit before time runs out.</li>
+      <li>✅ Results will be shown immediately after submission.</li>
+    </ul>
+    <div style="text-align:center; margin-top:20px;">
+      <button onclick="dismissInstructions()" 
+              style="padding:10px 20px; font-size:16px; font-weight:bold; 
+                     border-radius:10px; background:#34d399; color:#042033; cursor:pointer;">
+        🚀 Start Exam
+      </button>
+    </div>
+  </div>
+</div>
+
+  <!-- 🔹 Custom Animated Message (top banner) -->
+  <div class="exam-message">
+     <div id="examMsg">📢 Welcome to your exam! Best of luck 🚀 </div>
+  </div>
+<div id="examCharacterName" 
+     style="
+       position: absolute;
+       font-size: 24px;
+       font-weight: bold;
+       color: #60a5fa;
+       pointer-events: none;
+       user-select: none;
+       z-index: 9999;
+     ">
+</div>
+<!-- 🔒 Lock screen when exam is paused -->
+<div id="lockScreen"
+     style="position:fixed;inset:0;background:rgba(0,0,0,0.85);
+            color:white;display:none;flex-direction:column;align-items:center;
+            justify-content:center;z-index:10000;">
+  <h2>⚠️ Exam Paused</h2>
+  <p>You exited fullscreen mode. Enter the password to continue.</p>
+  <input type="password" id="unlockPassword" placeholder="Enter password"
+         style="padding:8px;margin-top:10px">
+  <button onclick="unlockExam()" 
+          style="padding:8px 15px;margin-top:10px;cursor:pointer;">
+    Unlock & Resume
+  </button>
+</div>
+
+  <div id="examInner">
+    <div id="fsUser">
+      <img id="fsPhoto" src="" alt="photo">
+      <!-- User Live Camera -->
+<video id="remoteVideo" autoplay playsinline muted
+       style="width:20%;max-height:50px;border-radius:12px;margin-top:12px">
+</video>
+
+      <h2 id="fsName"></h2>
+      <div class="small" id="fsMeta"></div>
+ <div id="answerStats" class="answer-stats"></div>
+    </div>
+    <div id="fsMain">
+      <div id="fsScrollArea">
+  <div id="fsQuestion">Question will appear here</div>
+  <div id="fsOptions"></div>
+</div>
+
+      <!-- NEW: Direct question navigation -->
+      <div id="questionNav" style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0;"></div>
+
+      <div class="fsFooter">
+        <div style="display:flex;gap:8px;">
+          <button class="btn" onclick="toggleFlag()">⚑ Flag</button>
+          <button class="btn" onclick="prevQuestion()">⟵ Prev</button>
+          <button class="btn" onclick="nextQuestion()">Next ⟶</button>
+        </div>
+        <div class="spacer"></div>
+        <div class="timer" id="fsTimer">00:00:00</div>
+        <button class="btn warn" onclick="submitExam()">Submit</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="fsProgressFill"></div></div>
+    </div>
+  </div>
+<div id="answerStats" class="answer-stats"></div>
+
+</div>
+ <script src="app.js"></script>
+</body>
+</html>
+
