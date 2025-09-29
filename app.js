@@ -1,4 +1,29 @@
-﻿async function saveToFirestore(collectionName, id, data, localKey=null) {
+// ---------- wait for firestore helpers to appear (non-blocking/failsafe) ----------
+function waitForFirestoreReady(timeout = 6000) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    (function poll() {
+      if (typeof window.db !== 'undefined'
+          && typeof window.getDoc === 'function'
+          && typeof window.doc === 'function'
+          && typeof window.deleteDoc === 'function') {
+        return resolve(true);
+      }
+      if (Date.now() - start > timeout) return resolve(false);
+      setTimeout(poll, 120);
+    })();
+  });
+}
+window._firestoreReadyPromise = waitForFirestoreReady(6000);
+window._firestoreReadyPromise.then(ok => {
+  if (!ok) console.warn('Firestore not available or getDoc/doc not imported - falling back to local storage');
+  else console.log('Firestore helpers ready.');
+});
+
+
+
+
+async function saveToFirestore(collectionName, id, data, localKey=null) {
   try {
     if (localKey) write(localKey, data); // keep offline copy
     await setDoc(doc(db, collectionName, id), data);
@@ -39,9 +64,9 @@ async function saveQuestion(q) {
 window.saveQuestion = saveQuestion; // expose globally if admin UI needs it
 
 // ----------------- deleteQuestion helper -----------------
+// ----------------- deleteQuestion helper (async & waits for firestore) -----------------
 async function deleteQuestion(id) {
   if (!id) return alert('No question id provided.');
-
   if (!confirm('Delete this question? This will remove it locally and attempt to remove from Firestore.')) return;
 
   try {
@@ -49,20 +74,16 @@ async function deleteQuestion(id) {
     questions = (Array.isArray(questions) ? questions : []).filter(q => q.id !== id);
 
     // 2) Persist to localStorage
-    try {
-      write(K_QS, questions);
-    } catch (e) {
-      console.warn('Could not write localStorage after delete:', e);
-    }
+    try { write(K_QS, questions); } catch (e) { console.warn('Could not write localStorage after delete:', e); }
 
     // 3) Attempt Firestore delete (best-effort)
     try {
-      // note: deleteDoc, doc and db should be exposed globally by index.html's module init
-      if (typeof deleteDoc === 'function' && typeof doc === 'function' && typeof db !== 'undefined') {
+      const ready = await (window._firestoreReadyPromise || Promise.resolve(false));
+      if (ready && typeof deleteDoc === 'function' && typeof doc === 'function' && typeof db !== 'undefined') {
         await deleteDoc(doc(db, 'questions', id));
         console.log('✅ Firestore: deleted questions/' + id);
       } else {
-        console.warn('Firestore helpers not available in global scope — skipped Firestore delete.');
+        console.warn('Firestore helpers not ready — skipped Firestore delete.');
       }
     } catch (err) {
       console.warn('⚠️ Firestore delete failed (check rules/permissions):', err);
@@ -70,11 +91,9 @@ async function deleteQuestion(id) {
     }
 
     // 4) Refresh UI
-    if (typeof renderQuestionsList === 'function') {
-      renderQuestionsList();
-    } else {
-      location.reload(); // fallback
-    }
+    if (typeof renderQuestionsList === 'function') renderQuestionsList();
+    else location.reload();
+
   } catch (e) {
     console.error('deleteQuestion error:', e);
     alert('Failed to delete question (see console).');
@@ -4262,6 +4281,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
