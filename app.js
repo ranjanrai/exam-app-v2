@@ -404,24 +404,41 @@ document.addEventListener('DOMContentLoaded', ()=> {
 // importFullBackup(file);
 
 // Instead, wire the backup-specific input (you already have one in index.html with id="importBackupFile")
-const importBackupInput = document.getElementById('importBackupFile');
-if (importBackupInput) {
-  importBackupInput.addEventListener('change', (e) => {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.json')) {
-      alert('Please select a .json backup file');
-      importBackupInput.value = '';
-      return;
-    }
-    if (!confirm('Importing will overwrite local users, questions, results and settings. Proceed?')) {
-      importBackupInput.value = '';
-      return;
-    }
-    importFullBackup(file);
-    importBackupInput.value = ''; // reset after use
-  });
-}
+// === Import wiring: Question-file input (impQFile) already wired via onchange in index.html ===
+// No JS needed for impQFile — importQuestionsFile(event) will run directly from the input onchange.
+
+// === Ensure backup import input is wired to full-backup handler ===
+// If your index.html has a backup import input, ensure it has an id like "importBackupFile".
+// This JS wires it safely to importFullBackup(file) and prevents accidental overlap.
+
+document.addEventListener('DOMContentLoaded', () => {
+  const importBackupInput = document.getElementById('importBackupFile'); // backup/import-all input (if present)
+  if (importBackupInput) {
+    importBackupInput.addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith('.json')) {
+        alert('Please select a .json backup file');
+        importBackupInput.value = '';
+        return;
+      }
+      if (!confirm('Importing will overwrite local users, questions, results and settings. Proceed?')) {
+        importBackupInput.value = '';
+        return;
+      }
+      importFullBackup(file);
+      importBackupInput.value = ''; // reset after use
+    });
+  }
+
+  // remove any stray listener for importFileInput if present
+  const stray = document.getElementById('importFileInput');
+  if (stray) {
+    // If you intentionally had this element elsewhere, consider renaming or removing it.
+    // We'll neutralize its onchange to avoid conflicts.
+    stray.onchange = null;
+  }
+});
 
 
 // CAMERA permission preview helpers (put inside DOMContentLoaded)
@@ -4373,6 +4390,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
