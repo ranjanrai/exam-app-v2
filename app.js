@@ -38,6 +38,51 @@ async function saveQuestion(q) {
 }
 window.saveQuestion = saveQuestion; // expose globally if admin UI needs it
 
+// ----------------- deleteQuestion helper -----------------
+async function deleteQuestion(id) {
+  if (!id) return alert('No question id provided.');
+
+  if (!confirm('Delete this question? This will remove it locally and attempt to remove from Firestore.')) return;
+
+  try {
+    // 1) Remove locally
+    questions = (Array.isArray(questions) ? questions : []).filter(q => q.id !== id);
+
+    // 2) Persist to localStorage
+    try {
+      write(K_QS, questions);
+    } catch (e) {
+      console.warn('Could not write localStorage after delete:', e);
+    }
+
+    // 3) Attempt Firestore delete (best-effort)
+    try {
+      // note: deleteDoc, doc and db should be exposed globally by index.html's module init
+      if (typeof deleteDoc === 'function' && typeof doc === 'function' && typeof db !== 'undefined') {
+        await deleteDoc(doc(db, 'questions', id));
+        console.log('✅ Firestore: deleted questions/' + id);
+      } else {
+        console.warn('Firestore helpers not available in global scope — skipped Firestore delete.');
+      }
+    } catch (err) {
+      console.warn('⚠️ Firestore delete failed (check rules/permissions):', err);
+      alert('⚠️ Deleted locally but failed to delete from Firestore (see console). Check Firestore rules or console errors.');
+    }
+
+    // 4) Refresh UI
+    if (typeof renderQuestionsList === 'function') {
+      renderQuestionsList();
+    } else {
+      location.reload(); // fallback
+    }
+  } catch (e) {
+    console.error('deleteQuestion error:', e);
+    alert('Failed to delete question (see console).');
+  }
+}
+window.deleteQuestion = deleteQuestion;
+
+
 /* -------------------------
    Storage keys & defaults
    ------------------------- */
@@ -1702,13 +1747,7 @@ function renderQuestionsList() {
     const delBtn = document.createElement('button'); 
     delBtn.className = 'btn danger'; 
     delBtn.textContent = 'Delete'; 
-    delBtn.onclick = () => { 
-      if (confirm('Delete question?')) { 
-        questions = questions.filter(x => x.id !== q.id); 
-        write(K_QS, questions); 
-        renderQuestionsList(); 
-      } 
-    };
+    delBtn.onclick = () => deleteQuestion(q.id);
 
     wrapper.appendChild(textDiv);
     wrapper.appendChild(editBtn);
@@ -4223,5 +4262,6 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
