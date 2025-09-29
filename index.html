@@ -27,6 +27,30 @@ import { getFirestore, collection, doc, setDoc, addDoc, updateDoc, getDocs, getD
   window.db = getFirestore(app);
   window.storage = getStorage(app);
 
+  // --- Anonymous Auth: add this block directly after window.storage = getStorage(app);
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+const auth = getAuth(app);
+window.auth = auth; // expose if other scripts need it
+
+// auto sign-in anonymously (will create an anonymous account for every visitor)
+signInAnonymously(auth)
+  .then(() => {
+    console.log("✅ Signed in anonymously");
+  })
+  .catch((error) => {
+    console.error("Anonymous sign-in error:", error);
+  });
+
+// optional: listen for auth state changes (useful for debugging)
+onAuthStateChanged(auth, user => {
+  if (user) {
+    console.log("Auth state: signed in as", user.uid, "isAnonymous:", user.isAnonymous);
+  } else {
+    console.log("Auth state: signed out");
+  }
+});
+
   // ✅ Expose Firestore helpers globally
    // ✅ Expose Firestore helpers globally (make sure module-level imports are available to non-module callers)
  window.setDoc = setDoc;
@@ -838,5 +862,6 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
  <script src="app.js"></script>
 </body>
 </html>
+
 
 
