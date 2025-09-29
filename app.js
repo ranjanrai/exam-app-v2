@@ -1843,13 +1843,35 @@ function adminEditUser(i){
   $('#adminNewPass').value = u.password;
   // photo left blank so admin can choose new one
 }
-function adminDeleteUser(i){
-  if(confirm("Delete this user?")){
-    users.splice(i,1);
+async function adminDeleteUser(i) {
+  if (!confirm("Delete this user?")) return;
+
+  try {
+    const u = users[i];
+
+    // Remove locally first
+    users.splice(i, 1);
     write(K_USERS, users);
     renderUsersAdmin();
+
+    // Remove from Firestore as well
+    if (typeof deleteDoc === "function" && typeof doc === "function" && typeof db !== "undefined") {
+      try {
+        await deleteDoc(doc(db, "users", u.username));
+        console.log("✅ Firestore: deleted users/" + u.username);
+      } catch (err) {
+        console.warn("⚠️ Firestore user delete failed:", err);
+        alert("User deleted locally but Firestore delete failed. Check console and Firestore rules.");
+      }
+    } else {
+      console.warn("Firestore not available — skipped Firestore delete.");
+    }
+  } catch (err) {
+    console.error("adminDeleteUser error:", err);
+    alert("Something went wrong while deleting the user. See console.");
   }
 }
+
 
 function renderUsersAdmin(){
   const box = $('#adminUsersList');
@@ -4281,6 +4303,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
