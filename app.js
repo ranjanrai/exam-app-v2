@@ -1783,7 +1783,70 @@ function loadQuestionToForm(id){
   $('#qAnswer').value = String(q.answer); $('#qMarks').value = String(q.marks); $('#qCategory').value = q.category;
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-function clearAllQuestions(){ if(!confirm('Delete ALL questions?')) return; questions = []; write(K_QS, questions); renderQuestionsList(); }
+// Replace existing clearAllQuestions() with this:
+async function clearAllQuestions(){
+  if(!confirm('Delete ALL questions? This will remove local copy AND try to remove all questions from Firestore. This cannot be undone.')) return;
+
+  // 1) Clear local copy & UI immediately
+  questions = [];
+  try { write(K_QS, questions); } catch(e){ console.warn('Could not update localStorage after clearing questions:', e); }
+  try { renderQuestionsList(); } catch(e){ console.warn('renderQuestionsList error', e); }
+
+  // 2) Try to remove from Firestore (best-effort)
+  try {
+    // ensure firestore helpers are ready
+    const ready = await (window._firestoreReadyPromise || Promise.resolve(false));
+    if (!ready || typeof collection === 'undefined' || typeof getDocs === 'undefined' || typeof db === 'undefined') {
+      console.warn('Firestore not ready or helpers missing - skipped remote delete.');
+      alert('Local questions cleared. Firestore not available — remote delete skipped.');
+      return;
+    }
+
+    // fetch all question docs
+    const colRef = collection(db, 'questions');
+    const snap = await getDocs(colRef);
+    if (snap.empty) {
+      console.log('No remote questions found - nothing to delete.');
+      alert('All questions cleared locally. No remote questions found.');
+      return;
+    }
+
+    // Use batch delete in chunks of 500 (Firestore limit)
+    const docs = [];
+    snap.forEach(docSnap => docs.push(docSnap));
+    const BATCH_SIZE = 500;
+    let deleted = 0;
+
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+      const chunk = docs.slice(i, i + BATCH_SIZE);
+      // prefer writeBatch if available
+      if (typeof writeBatch === 'function') {
+        const batch = writeBatch(db);
+        chunk.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        deleted += chunk.length;
+        console.log(`Batch deleted ${chunk.length} docs (${deleted}/${docs.length})`);
+      } else {
+        // fallback: deleteDoc one-by-one
+        for (const d of chunk) {
+          await deleteDoc(doc(db, 'questions', d.id));
+          deleted++;
+        }
+        console.log(`Individually deleted ${chunk.length} docs (${deleted}/${docs.length})`);
+      }
+    }
+
+    alert(`All questions removed locally. Attempted remote delete and removed ${deleted} remote documents (check console).`);
+    // final re-render
+    if (typeof renderQuestionsList === 'function') renderQuestionsList();
+
+  } catch (err) {
+    console.error('clearAllQuestions: Firestore delete error', err);
+    // common cause: security rules / insufficient permissions
+    alert('Questions cleared locally, but remote delete failed. See console for details (likely Firestore rules / permissions).');
+  }
+}
+
 
 /* ---------------- USERS ADMIN ---------------- */
 async function toDataURL(file){ 
@@ -4303,6 +4366,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
