@@ -664,7 +664,10 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
         <h3>Questions</h3>
         <div id="questionsList" class="list"></div>
         <div style="margin-top:8px" class="row">
-          <input type="file" id="importFileInput" accept=".json" style="display:none" />
+          <!-- Question Bank: Import Questions (replace existing import input/button here) -->
+<input type="file" id="impQFile" accept="application/json" style="display:none" onchange="importQuestionsFile(event)" />
+<button class="btn warn" onclick="document.getElementById('impQFile').click()">Import Questions (.json)</button>
+
 <button class="btn warn" onclick="document.getElementById('importFileInput').click()">Import Questions (.json)</button>
           <button class="btn" onclick="exportQuestions()">Export questions (.json)</button>
           <button class="btn danger" onclick="clearAllQuestions()">Delete All</button>
@@ -862,6 +865,7 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
  <script src="app.js"></script>
 </body>
 </html>
+
 
 
 
