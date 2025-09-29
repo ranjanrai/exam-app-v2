@@ -9,6 +9,35 @@
     return false;
   }
 }
+// ----------------- Question save helper -----------------
+// Place this right after saveToFirestore(...) in app.js
+async function saveQuestion(q) {
+  if (!q || !q.id) q.id = uid();
+
+  // update or add in local questions array
+  const idx = questions.findIndex(x => x.id === q.id);
+  if (idx >= 0) {
+    questions[idx] = q;
+  } else {
+    questions.push(q);
+  }
+
+  // persist locally
+  write(K_QS, questions);
+
+  // persist to Firestore (best-effort)
+  try {
+    await saveToFirestore("questions", q.id, q, K_QS);
+    console.log("✅ Question saved to Firestore:", q.id);
+  } catch (err) {
+    console.warn("⚠️ Failed to save question to Firestore (local saved):", err);
+  }
+
+  // refresh UI if renderQuestionsList exists
+  if (typeof renderQuestionsList === "function") renderQuestionsList();
+}
+window.saveQuestion = saveQuestion; // expose globally if admin UI needs it
+
 /* -------------------------
    Storage keys & defaults
    ------------------------- */
@@ -148,50 +177,69 @@ function downloadBackup() {
   a.click();
 }
 
-function importFullBackup(file) {
+// ----------------- Improved importFullBackup -----------------
+async function importFullBackup(file) {
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const backup = JSON.parse(e.target.result);
 
+      // update in-memory and localStorage
       users = backup.users || [];
       questions = backup.questions || [];
       results = backup.results || [];
 
-      // Merge with defaults
+      // Merge settings safely (keeps existing defaults if missing)
       settings = {
         ...settings,
-        durationMin: backup.settings?.durationMin ?? settings.durationMin ?? 30,
-        customMsg: backup.settings?.customMsg ?? settings.customMsg ?? "📢 Welcome to your exam! Stay calm, focus, and do your best!",
-        shuffle: backup.settings?.shuffle ?? settings.shuffle ?? false,
-        allowAfterTime: backup.settings?.allowAfterTime ?? settings.allowAfterTime ?? false,
-        logo: backup.settings?.logo ?? settings.logo ?? "",
-        author: backup.settings?.author ?? settings.author ?? "",
-        college: backup.settings?.college ?? settings.college ?? "",
-        subject: backup.settings?.subject ?? settings.subject ?? "",
-        subjectCode: backup.settings?.subjectCode ?? settings.subjectCode ?? "",
-        fullMarks: backup.settings?.fullMarks ?? settings.fullMarks ?? 0,
+        durationMin: backup.settings?.durationMin ?? settings.durationMin,
+        customMsg: backup.settings?.customMsg ?? settings.customMsg,
+        shuffle: backup.settings?.shuffle ?? settings.shuffle,
+        allowAfterTime: backup.settings?.allowAfterTime ?? settings.allowAfterTime,
+        logo: backup.settings?.logo ?? settings.logo,
+        author: backup.settings?.author ?? settings.author,
+        college: backup.settings?.college ?? settings.college,
+        subject: backup.settings?.subject ?? settings.subject,
+        subjectCode: backup.settings?.subjectCode ?? settings.subjectCode,
+        fullMarks: backup.settings?.fullMarks ?? settings.fullMarks,
         counts: {
           Synopsis: backup.settings?.counts?.Synopsis ?? settings.counts?.Synopsis ?? 0,
           "Minor Practical": backup.settings?.counts?.["Minor Practical"] ?? settings.counts?.["Minor Practical"] ?? 0,
           "Major Practical": backup.settings?.counts?.["Major Practical"] ?? settings.counts?.["Major Practical"] ?? 0,
           Viva: backup.settings?.counts?.Viva ?? settings.counts?.Viva ?? 0
-        }
+        },
+        totalQs: backup.settings?.totalQs ?? settings.totalQs // if present
       };
 
       adminCred = backup.adminCred || MASTER_ADMIN;
 
+      // persist locally
       write(K_USERS, users);
       write(K_QS, questions);
       write(K_RESULTS, results);
       write(K_SETTINGS, settings);
       write(K_ADMIN, adminCred);
 
-      alert("✅ Full backup restored!");
-      renderUsersAdmin();
-      renderQuestionsList();
-      renderResults();
-      renderSettingsAdmin();
+      // Persist questions to Firestore in bulk (best-effort)
+      // IMPORTANT: this will write each question doc under collection "questions"
+      const failList = [];
+      for (const q of questions) {
+        try {
+          // ensure id exists
+          if (!q.id) q.id = uid();
+          await saveToFirestore("questions", q.id, q, K_QS);
+        } catch (err) {
+          console.warn("Failed to save question to Firestore:", q.id, err);
+          failList.push(q.id || JSON.stringify(q).slice(0,40));
+        }
+      }
+
+      alert(`✅ Full backup restored! Firestore failures: ${failList.length}`);
+      // refresh all admin UI
+      if (typeof renderQuestionsList === "function") renderQuestionsList();
+      if (typeof renderUsersAdmin === "function") renderUsersAdmin();
+      if (typeof renderResults === "function") renderResults();
+      if (typeof renderSettingsAdmin === "function") renderSettingsAdmin();
     } catch (err) {
       alert("❌ Invalid backup file");
       console.error(err);
@@ -199,6 +247,7 @@ function importFullBackup(file) {
   };
   reader.readAsText(file);
 }
+window.importFullBackup = importFullBackup;
 
 
 function updateBackup() {
@@ -4174,4 +4223,5 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
