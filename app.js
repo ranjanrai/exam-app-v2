@@ -3066,13 +3066,67 @@ function importQuestionsFile(e){
     try {
       const arr = JSON.parse(fr.result);
       if(!Array.isArray(arr)) throw 'bad';
-      questions = arr.map(q => ({ id: q.id || uid(), question: q.question || '', options: q.options || ['','','',''], answer: parseInt(q.answer)||0, marks: parseInt(q.marks)||1, category: q.category || 'Synopsis' }));
-      write(K_QS, questions); alert('Questions imported'); renderQuestionsList();
+      questions = arr.map(...);
+write(K_QS, questions);
+alert('Questions imported locally. Click "Save imported to Firebase" to push them to Firestore.');
+renderQuestionsList();
+// enable the save button
+const sbtn = document.getElementById('saveImportedBtn');
+if (sbtn) sbtn.disabled = false;
+
     } catch(err){ console.error(err); alert('Invalid questions JSON'); }
   };
   fr.readAsText(f);
   e.target.value = '';
 }
+// ---------------- Save imported questions to Firestore ----------------
+async function saveImportedQuestionsToFirestore() {
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return alert('No imported questions to save.');
+  }
+
+  // Ensure Firestore helpers are ready
+  const ready = await (window._firestoreReadyPromise || Promise.resolve(false));
+  if (!ready || typeof setDoc !== 'function' || typeof doc !== 'function' || typeof db === 'undefined') {
+    return alert('Firestore not ready or not available. Check Firebase initialization.');
+  }
+
+  // Disable button while saving
+  const saveBtn = document.getElementById('saveImportedBtn');
+  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+
+  let success = 0;
+  const failed = [];
+
+  for (const q of questions) {
+    try {
+      if (!q.id) q.id = uid();
+      // write the full question doc
+      await setDoc(doc(db, 'questions', q.id), q);
+      success++;
+    } catch (err) {
+      console.error('Failed to save question to Firestore:', q.id, err);
+      failed.push({ id: q.id, error: err && err.message ? err.message : String(err) });
+    }
+  }
+
+  // Attempt to refresh remote cache / UI
+  try { if (typeof loadQuestionsFromFirestore === 'function') await loadQuestionsFromFirestore(); } catch(e){ console.warn('loadQuestionsFromFirestore failed', e); }
+
+  // Re-enable button and show result
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save imported to Firebase';
+  }
+
+  alert(`Saved ${success} questions to Firestore. Failed: ${failed.length}`);
+  if (failed.length) console.warn('Failed saves:', failed);
+
+  // Refresh UI
+  if (typeof renderQuestionsList === 'function') renderQuestionsList();
+}
+window.saveImportedQuestionsToFirestore = saveImportedQuestionsToFirestore;
+
 
 function exportUsers(){ download('users.json', JSON.stringify(users, null, 2), 'application/json'); }
 function exportQuestions(){ download('questions.json', JSON.stringify(questions, null, 2), 'application/json'); }
@@ -4400,6 +4454,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
