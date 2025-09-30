@@ -172,23 +172,51 @@ min-height:80px
 @media (max-width:600px){
   #fsUser img { width: 100px; height: 100px; }
 }
-/* Compact grid of question numbers on mobile */
-@media (max-width:600px){
+/* Mobile: compact horizontal question nav (replace previous grid rule) */
+@media (max-width: 600px) {
+  /* make the nav a single horizontal strip that scrolls if needed */
   #questionNav {
-    display: grid !important;
-    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); 
+    display: flex !important;
+    flex-wrap: nowrap;
     gap: 6px;
-    padding: 8px 4px;
+    padding: 6px 6px;
+    margin: 8px 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    align-items: center;
+    /* optional visual containment */
+    background: rgba(255,255,255,0.01);
+    border-radius: 8px;
   }
+
+  /* each button stays fixed size and won't stretch */
   #questionNav button {
-    min-width: 40px;
-    height: 40px;
+    flex: 0 0 44px;      /* keeps a comfortable tappable area */
+    min-width: 44px;
+    height: 44px;
     font-size: 14px;
+    line-height: 1;
     text-align: center;
-    border-radius: 6px; /* square with rounded edges */
     padding: 0;
+    border-radius: 8px;
+    white-space: nowrap;
   }
+
+  /* reduce option card spacing a little on mobile */
+  .fsOpt { padding: 12px; font-size: 15px; }
+
+  /* keep the nav above the footer controls */
+  #questionNav {
+    position: sticky;
+    bottom: 68px; /* push it above .fsFooter (adjust if your footer height differs) */
+    z-index: 30;
+  }
+
+  /* hide scrollbar in WebKit but keep scrolling usable */
+  #questionNav::-webkit-scrollbar { height: 6px; }
+  #questionNav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 6px; }
 }
+
 #remoteVideo {
   display: none;   /* ✅ hidden by default */
   background: black;
@@ -325,6 +353,7 @@ min-height:80px
   0%   { background-position: 0% 50%; }
   100% { background-position: 200% 50%; }
 }
+
 
 
 
