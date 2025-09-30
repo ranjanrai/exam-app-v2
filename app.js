@@ -1991,14 +1991,24 @@ async function renderSessionsAdmin() {
     const out = document.getElementById("sessionsList");
     if (!out) return;
 
-    const arr = [];
-    snap.forEach(d => {
-      const data = d.data();
-      if (!data) return;
-      if (data.remainingMs > 0 && !data.submitted) {
-        arr.push({ id: d.id, ...data });
-      }
-    });
+    // Collect docs, keep only valid data, normalize remainingMs to Number
+    const arr = snap.docs
+      .map(d => {
+        const data = d.data();
+        if (!data) return null;
+        return {
+          id: d.id,
+          remainingMs: Number(data.remainingMs ?? 0),
+          submitted: !!data.submitted,
+          // copy other fields if needed: ...data
+          ...data
+        };
+      })
+      .filter(Boolean)
+      // only active, not yet submitted sessions
+      .filter(s => s.remainingMs > 0 && !s.submitted)
+      // sort by remaining time ascending (soonest to finish first)
+      .sort((a, b) => a.remainingMs - b.remainingMs);
 
     out.innerHTML = "";
 
@@ -2007,20 +2017,54 @@ async function renderSessionsAdmin() {
       return;
     }
 
+    // Use a fragment for better performance on many items
+    const frag = document.createDocumentFragment();
+
     arr.forEach(s => {
       const div = document.createElement("div");
       div.className = "list-item";
-      div.innerHTML = `
-        <div style="flex:1">
-          <b>${escapeHTML(s.id)}</b>
-          <span class="small"> • ${Math.round((s.remainingMs||0)/60000)} min left</span>
-        </div>
-        <button class="btn brand" onclick="watchLiveSession('${s.id}')">👀 Watch</button>
-      `;
-      out.appendChild(div);
+
+      // left column: id + minutes left — use textContent to avoid XSS
+      const left = document.createElement("div");
+      left.style.flex = "1";
+
+      const idEl = document.createElement("b");
+      idEl.textContent = s.id;
+
+      const mins = Math.max(0, Math.round((s.remainingMs || 0) / 60000));
+      const small = document.createElement("span");
+      small.className = "small";
+      small.textContent = ` • ${mins} min left`;
+
+      left.appendChild(idEl);
+      left.appendChild(small);
+
+      // watch button (safer than inline onclick string)
+      const btn = document.createElement("button");
+      btn.className = "btn brand";
+      btn.type = "button";
+      btn.textContent = "👀 Watch";
+      btn.addEventListener("click", () => {
+        if (typeof watchLiveSession === "function") {
+          watchLiveSession(s.id);
+        } else {
+          console.warn("watchLiveSession is not defined");
+        }
+      });
+
+      div.appendChild(left);
+      div.appendChild(btn);
+
+      frag.appendChild(div);
     });
+
+    out.appendChild(frag);
+
   } catch (err) {
     console.warn("renderSessionsAdmin error", err);
+    // show a visible message in UI so admins know something went wrong
+    const out = document.getElementById("sessionsList");
+    if (out) out.innerHTML = `<div class="small">Error loading sessions (see console)</div>`;
   }
 }
 window.renderSessionsAdmin = renderSessionsAdmin;
@@ -3060,25 +3104,35 @@ function importUsersFile(e){
   e.target.value = '';
 }
 function importQuestionsFile(e){
-  const f = e.target.files[0]; if(!f) return;
+  const f = e.target.files[0];
+  if(!f) return;
   const fr = new FileReader();
   fr.onload = ()=> {
     try {
       const arr = JSON.parse(fr.result);
       if(!Array.isArray(arr)) throw 'bad';
-      questions = arr.map(...);
-write(K_QS, questions);
-alert('Questions imported locally. Click "Save imported to Firebase" to push them to Firestore.');
-renderQuestionsList();
-// enable the save button
-const sbtn = document.getElementById('saveImportedBtn');
-if (sbtn) sbtn.disabled = false;
-
-    } catch(err){ console.error(err); alert('Invalid questions JSON'); }
+      questions = arr.map(q => ({
+        id: q.id || uid(),
+        question: q.question || '',
+        options: q.options || (q.optionsJSON ? JSON.parse(q.optionsJSON) : ['','','','']),
+        answer: (typeof q.answer === 'number') ? q.answer : parseInt(q.answer) || 0,
+        marks: parseInt(q.marks) || 1,
+        category: q.category || 'Synopsis'
+      }));
+      write(K_QS, questions);
+      alert('Questions imported locally. Click "Save imported to Firebase" to push them to Firestore.');
+      renderQuestionsList();
+      const sbtn = document.getElementById('saveImportedBtn');
+      if (sbtn) sbtn.disabled = false;
+    } catch(err){
+      console.error(err);
+      alert('Invalid questions JSON');
+    }
   };
   fr.readAsText(f);
   e.target.value = '';
 }
+
 // ---------------- Save imported questions to Firestore ----------------
 async function saveImportedQuestionsToFirestore() {
   if (!Array.isArray(questions) || questions.length === 0) {
@@ -3209,6 +3263,7 @@ async function importResultsFile(e) {
   }
 }
 
+
 function exportSettings() {
   if (!settings) return alert("No exam settings to export");
   download('exam_settings.json', JSON.stringify(settings, null, 2), 'application/json');
@@ -3227,24 +3282,25 @@ function importSettingsFile(e) {
 
       // Merge with defaults and existing settings
       settings = {
-        ...settings,
-        durationMin: obj.durationMin ?? settings.durationMin ?? 30,
-        customMsg: obj.customMsg ?? settings.customMsg ?? "📢 Welcome to your exam! Stay calm, focus, and do your best!",
-        shuffle: obj.shuffle ?? settings.shuffle ?? false,
-        allowAfterTime: obj.allowAfterTime ?? settings.allowAfterTime ?? false,
-        logo: obj.logo ?? settings.logo ?? "",
-        author: obj.author ?? settings.author ?? "",
-        college: obj.college ?? settings.college ?? "",
-        subject: obj.subject ?? settings.subject ?? "",
-        subjectCode: obj.subjectCode ?? settings.subjectCode ?? "",
-        fullMarks: obj.fullMarks ?? settings.fullMarks ?? 0,
-        counts: {
-          Synopsis: obj.counts?.Synopsis ?? settings.counts?.Synopsis ?? 0,
-          "Minor Practical": obj.counts?.["Minor Practical"] ?? settings.counts?.["Minor Practical"] ?? 0,
-          "Major Practical": obj.counts?.["Major Practical"] ?? settings.counts?.["Major Practical"] ?? 0,
-          Viva: obj.counts?.Viva ?? settings.counts?.Viva ?? 0
-        }
-      };
+  ...settings,
+  durationMin: obj.durationMin ?? settings.durationMin ?? 30,
+  customMsg: obj.customMsg ?? settings.customMsg ?? "📢 Welcome to your exam! Stay calm, focus, and do your best!",
+  shuffle: obj.shuffle ?? settings.shuffle ?? false,
+  allowAfterTime: obj.allowAfterTime ?? settings.allowAfterTime ?? false,
+  logo: obj.logo ?? settings.logo ?? "",
+  author: obj.author ?? settings.author ?? "",
+  college: obj.college ?? settings.college ?? "",
+  subject: obj.subject ?? settings.subject ?? "",
+  subjectCode: obj.subjectCode ?? settings.subjectCode ?? "",
+  fullMarks: obj.fullMarks ?? settings.fullMarks ?? 0,
+  counts: {
+    Synopsis: obj.counts?.Synopsis ?? settings.counts?.Synopsis ?? 0,
+    "Minor Practical": obj.counts?.["Minor Practical"] ?? settings.counts?.["Minor Practical"] ?? 0,
+    "Major Practical": obj.counts?.["Major Practical"] ?? settings.counts?.["Major Practical"] ?? 0,
+    Viva: obj.counts?.Viva ?? settings.counts?.Viva ?? 0
+  }
+};
+
 
       write(K_SETTINGS, settings);
       alert('✅ Exam settings imported!');
@@ -4476,6 +4532,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
