@@ -462,17 +462,15 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
         </div>
         <div style="width:220px">
           <label>Import Questions (.json)</label>
-          <input id="impQFile" type="file" accept="application/json" onchange="importQuestionsFile(event)">
+<!-- removed duplicate input to avoid conflict; if you need a top import, give it a unique id -->
+<input id="impQFile_top" type="file" accept="application/json" onchange="importQuestionsFile(event)">
+
         </div>
       </div>
 <div style="height:12px"></div>
 <div class="row">
   <button class="btn" onclick="exportSettings()">Export Exam Settings (.json)</button>
   <button class="btn" onclick="triggerImportSettings()">Import Exam Settings (.json)</button>
-  <!-- NEW: save imported to Firestore (disabled until import) -->
-<button class="btn warn" id="saveImportedBtn" onclick="saveImportedQuestionsToFirestore()" disabled>
-  Save imported to Firebase
-</button>
   <input id="impSettingsFile" type="file" accept="application/json" onchange="importSettingsFile(event)" style="display:none">
 </div>
 
@@ -666,13 +664,19 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
       <div style="width:420px;min-width:280px">
         <h3>Questions</h3>
         <div id="questionsList" class="list"></div>
-        <div style="margin-top:8px" class="row">
-          <!-- Question Bank: Import Questions (replace existing import input/button here) -->
-<input type="file" id="impQFile" accept="application/json" style="display:none" onchange="importQuestionsFile(event)" />
-<button class="btn warn" onclick="document.getElementById('impQFile').click()">Import Questions (.json)</button>
-          <button class="btn" onclick="exportQuestions()">Export questions (.json)</button>
-          <button class="btn danger" onclick="clearAllQuestions()">Delete All</button>
-        </div>
+        <<div style="margin-top:8px" class="row">
+  <input type="file" id="impQFile" accept="application/json" style="display:none" onchange="importQuestionsFile(event)" />
+  <button class="btn warn" onclick="document.getElementById('impQFile').click()">Import Questions (.json)</button>
+
+  <!-- SAVE BUTTON placed here (disabled until import) -->
+  <button class="btn warn" id="saveImportedBtn" onclick="saveImportedQuestionsToFirestore()" disabled>
+    Save imported to Firebase
+  </button>
+
+  <button class="btn" onclick="exportQuestions()">Export questions (.json)</button>
+  <button class="btn danger" onclick="clearAllQuestions()">Delete All</button>
+</div>
+
       </div>
     </div>
   </div>
@@ -867,6 +871,7 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
  <script src="app.js"></script>
 </body>
 </html>
+
 
 
 
