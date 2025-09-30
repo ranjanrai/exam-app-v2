@@ -443,31 +443,28 @@ min-height:80px
   0%   { background-position: 0% 50%; }
   100% { background-position: 200% 50%; }
 }
-/* collapse mode: single row, scrollable */
+/* === Force collapse mode (desktop + mobile) === */
 #questionNav.collapsed {
-  max-height: 48px !important;
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
   display: flex !important;
   flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  max-height: 48px !important;    /* only one row visible */
   gap: 6px !important;
   align-items: center !important;
+  padding: 4px !important;
 }
 
-/* toggle button styling */
-.qnav-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.2);
-  color: #fff;
+#questionNav.collapsed button {
+  flex: 0 0 auto !important;
+  min-width: 28px !important;
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 11px !important;
+  line-height: 28px !important;
 }
+
+
 
 
 
