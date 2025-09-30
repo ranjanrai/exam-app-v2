@@ -3158,33 +3158,55 @@ async function importResultsFile(e) {
 
   let allImported = [];
 
-  for (const file of files) {
-    const fr = new FileReader();
-    await new Promise((resolve, reject) => {
-      fr.onload = async () => {
-        try {
-          const imported = JSON.parse(fr.result);
-          const decrypted = await decryptData(imported); // decrypt each file
-          allImported = allImported.concat(decrypted);   // merge results
-          resolve();
-        } catch (err) {
-          console.error("Failed to import file", file.name, err);
-          alert(`❌ Failed to import ${file.name}`);
-          reject(err);
+  try {
+    for (const file of files) {
+      // read file text
+      const text = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+        fr.onload = () => resolve(fr.result);
+        fr.readAsText(file);
+      });
+
+      // parse JSON
+      let imported;
+      try {
+        imported = JSON.parse(text);
+      } catch (err) {
+        console.error("Invalid JSON in", file.name, err);
+        alert(`❌ Invalid JSON in ${file.name}`);
+        continue; // skip this file
+      }
+
+      // decrypt parsed data
+      try {
+        const decrypted = await decryptData(imported);
+        if (Array.isArray(decrypted)) {
+          allImported = allImported.concat(decrypted);
+        } else {
+          allImported.push(decrypted);
         }
-      };
-      fr.readAsText(file);
-    });
+      } catch (err) {
+        console.error("Failed to decrypt file", file.name, err);
+        alert(`❌ Failed to decrypt ${file.name}`);
+        continue; // skip this file
+      }
+    }
+
+    // Re-encrypt merged results before saving
+    const encryptedResults = await encryptData(allImported);
+    write(K_RESULTS, encryptedResults);
+    results = allImported;
+
+    alert(`✅ Imported ${files.length} results file(s) successfully!`);
+    renderResults();
+  } catch (err) {
+    console.error("Import failed", err);
+    alert('❌ Import failed. See console for details.');
+  } finally {
+    // reset file input even on error
+    e.target.value = "";
   }
-
-  // 🔒 Re-encrypt merged results before saving
-  const encryptedResults = await encryptData(allImported);
-  write(K_RESULTS, encryptedResults);
-  results = allImported;
-
-  alert(`✅ Imported ${files.length} results file(s) successfully!`);
-  renderResults();
-  e.target.value = ""; // reset file input
 }
 
 function exportSettings() {
@@ -4454,6 +4476,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
