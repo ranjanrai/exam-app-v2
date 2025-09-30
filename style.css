@@ -223,6 +223,88 @@ min-height:80px
   }
 }
 
+/* === Desktop: compact question nav (applies from tablet/desktop) === */
+@media (min-width: 601px) {
+  /* container: grid with fixed columns and a modest max-height */
+  #questionNav {
+    display: grid;
+    grid-template-columns: repeat(5, 44px); /* 5 columns of buttons */
+    grid-auto-rows: 44px;                   /* fixed row height */
+    gap: 10px;
+    padding: 10px;
+    margin: 10px 0;
+    max-height: 220px;                      /* allow ~5 rows then scroll */
+    width: 100%;
+    box-sizing: border-box;
+    overflow: auto;                         /* scroll when too many items */
+    background: rgba(255,255,255,0.01);
+    border-radius: 8px;
+  }
+
+  /* consistent button sizing & reduced visual weight */
+  #questionNav button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    padding: 0;
+    font-size: 13px;
+    line-height: 44px;
+    text-align: center;
+    border-radius: 8px;
+    box-sizing: border-box;
+    border-width: 1px;
+    border-style: solid;
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+
+  /* selected / active */
+  #questionNav button.active,
+  #questionNav button.selected {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+  }
+
+  /* reduce nav footprint visually when placed at bottom */
+  .fsFooter + #questionNav,
+  #questionNav.footer-placed {
+    max-width: 520px; /* keep it from spanning full width near footer */
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* small scrollbar for aesthetic */
+  #questionNav::-webkit-scrollbar { width: 8px; height: 8px; }
+  #questionNav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 6px; }
+}
+
+/* === Optional: collapse/expand behavior for desktop & mobile === */
+/* Add/remove class "collapsed" on #questionNav to hide/show the grid */
+#questionNav.collapsed {
+  max-height: 48px !important;         /* shrink to a single visible row */
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  grid-template-columns: none !important;  /* let it behave like a single line */
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 6px !important;
+  align-items: center !important;
+}
+
+/* small visual toggle button (place near nav in DOM) */
+.qnav-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: bold;
+  margin-left: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(0,0,0,0.06);
+}
 
 
 #remoteVideo {
@@ -361,6 +443,7 @@ min-height:80px
   0%   { background-position: 0% 50%; }
   100% { background-position: 200% 50%; }
 }
+
 
 
 
