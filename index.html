@@ -469,6 +469,10 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
 <div class="row">
   <button class="btn" onclick="exportSettings()">Export Exam Settings (.json)</button>
   <button class="btn" onclick="triggerImportSettings()">Import Exam Settings (.json)</button>
+  <!-- NEW: save imported to Firestore (disabled until import) -->
+<button class="btn warn" id="saveImportedBtn" onclick="saveImportedQuestionsToFirestore()" disabled>
+  Save imported to Firebase
+</button>
   <input id="impSettingsFile" type="file" accept="application/json" onchange="importSettingsFile(event)" style="display:none">
 </div>
 
@@ -863,6 +867,7 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
  <script src="app.js"></script>
 </body>
 </html>
+
 
 
 
