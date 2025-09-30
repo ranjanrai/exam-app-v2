@@ -839,9 +839,15 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
   <div id="fsQuestion">Question will appear here</div>
   <div id="fsOptions"></div>
 </div>
+<!-- Inside exam fullscreen area, near #questionNav -->
+<div style="display:flex;align-items:center;gap:6px;margin:6px 0;">
+  <div id="questionNav"></div>
+  <button id="qnavToggleBtn" class="qnav-toggle" aria-label="Toggle question navigation">−</button>
+</div>
 
       <!-- NEW: Direct question navigation -->
      <div id="questionNav"></div>
+      
 
       <div class="fsFooter">
         <div style="display:flex;gap:8px;">
@@ -865,6 +871,7 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
  <script src="app.js"></script>
 </body>
 </html>
+
 
 
 
