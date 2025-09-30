@@ -172,39 +172,57 @@ min-height:80px
 @media (max-width:600px){
   #fsUser img { width: 100px; height: 100px; }
 }
-/* Force single-row horizontal scrolling for #questionNav on small screens */
+/* === Mobile override: compact single-row question nav === */
 @media (max-width: 600px) {
+  /* container: single row with horizontal scroll */
   #questionNav {
     display: flex !important;
-    flex-wrap: nowrap !important;      /* IMPORTANT: prevent wrapping */
-    overflow-x: auto !important;       /* allow horizontal scroll */
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap !important;        /* prevent wrapping */
+    overflow-x: auto !important;         /* enable horizontal scroll */
+    overflow-y: hidden !important;       /* hide vertical */
+    -webkit-overflow-scrolling: touch !important;
     gap: 6px !important;
     padding: 6px !important;
     margin: 6px 0 !important;
-    max-height: 56px !important;       /* shows only one row */
+    max-height: 48px !important;         /* keep only one row visible */
     box-sizing: border-box !important;
-    white-space: nowrap !important;
+    align-items: center !important;
     position: sticky !important;
-    bottom: 68px !important;           /* adjust if footer height differs */
+    bottom: 68px !important;             /* adjust if footer differs */
     z-index: 50 !important;
   }
 
+  /* smaller buttons */
   #questionNav button {
-    flex: 0 0 auto !important;         /* prevent shrinking to fit */
-    min-width: 36px !important;
-    height: 36px !important;
-    font-size: 12px !important;
+    flex: 0 0 auto !important;
+    min-width: 28px !important;
+    width: 28px !important;
+    height: 28px !important;
     padding: 0 !important;
+    font-size: 11px !important;
+    line-height: 28px !important;
+    text-align: center !important;
     border-radius: 6px !important;
     box-sizing: border-box !important;
+    border-width: 1px !important;
+    border-style: solid !important;
   }
 
-  /* optional: small scrollbar styling for webkit */
+  /* highlight selected without enlarging */
+  #questionNav button.active,
+  #questionNav button.selected {
+    transform: none !important;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.15) inset !important;
+  }
+
+  /* scrollbar styling */
   #questionNav::-webkit-scrollbar { height: 6px; }
-  #questionNav::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 6px; }
+  #questionNav::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.06);
+    border-radius: 6px;
+  }
 }
+
 
 
 #remoteVideo {
@@ -343,6 +361,7 @@ min-height:80px
   0%   { background-position: 0% 50%; }
   100% { background-position: 200% 50%; }
 }
+
 
 
 
