@@ -529,6 +529,15 @@ const stopSSBtn = document.getElementById('stopScreenShareBtn');
 if (stopSSBtn) stopSSBtn.addEventListener('click', (e)=>{ 
   e.preventDefault(); 
   stopHomeScreenShare(); 
+  // ✅ Paste toggle-collapse code here
+  const nav = document.getElementById('questionNav');
+  const toggleBtn = document.getElementById('qnavToggleBtn');
+  if (nav && toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      nav.classList.toggle('collapsed');
+      toggleBtn.textContent = nav.classList.contains('collapsed') ? '+' : '−';
+    });
+  }
 });
   
 // Optional: stop camera when user navigates to the user section (so preview doesn't keep running)
@@ -4390,6 +4399,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
