@@ -1815,7 +1815,7 @@ function loadQuestionToForm(id){
   editingId = q.id;
   $('#qText').value = q.question; $('#qA').value=q.options[0]; $('#qB').value=q.options[1]; $('#qC').value=q.options[2]; $('#qD').value=q.options[3];
   $('#qAnswer').value = String(q.answer); $('#qMarks').value = String(q.marks); $('#qCategory').value = q.category;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+
 }
 // Replace existing clearAllQuestions() with this:
 async function clearAllQuestions(){
@@ -4532,6 +4532,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
