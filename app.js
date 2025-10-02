@@ -4014,8 +4014,21 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
  // Admin: render Visitors (before login) with View Msgs and Delete
+/*
+  Patch: renderVisitorsAdmin
+  - Adds "Online"/"Offline" badge for visitors (based on lastSeen threshold)
+  - Formats "Seen" time using 12-hour clock (e.g. "Oct 2, 2025, 04:15:02 PM")
+  - Keeps existing message/reply UI intact
+
+  How to apply:
+  - Replace the existing renderVisitorsAdmin() function in app.js with the code below.
+  - This snippet depends only on existing helpers (escapeHTML, collection, getDocs, doc, setDoc, onSnapshot).
+  - After replacing, open Admin -> Visitors and refresh — visitors with lastSeen within THRESHOLD_MS will show as Online (green).
+*/
+
 async function renderVisitorsAdmin() {
   const out = document.getElementById("adminVisitorsList");
+  if (!out) return console.warn('renderVisitorsAdmin: #adminVisitorsList not found');
   out.innerHTML = "<div class='small'>Loading visitors…</div>";
 
   try {
@@ -4025,10 +4038,27 @@ async function renderVisitorsAdmin() {
       return;
     }
 
+    // helper: format timestamp to 12-hour local format
+    const formatLastSeen12 = (ms) => {
+      if (!ms) return '-';
+      try {
+        const d = new Date(Number(ms));
+        // include date + time with hour12 true
+        return d.toLocaleString(undefined, { year:'numeric', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', second:'2-digit', hour12: true });
+      } catch (e) { return new Date(Number(ms)).toLocaleString(); }
+    };
+
+    const THRESHOLD_MS = 35 * 1000; // 35s window to consider "online" (matches visitor heartbeat 30s)
+    const now = Date.now();
+
     out.innerHTML = "";
     snap.forEach(docSnap => {
-      const v = docSnap.data();
+      const v = (typeof docSnap.data === 'function') ? docSnap.data() : (docSnap.data || {});
       const vid = v.visitorId || docSnap.id;
+
+      const lastSeenMs = Number(v.lastSeen || 0);
+      const isOnline = lastSeenMs && ((now - lastSeenMs) < THRESHOLD_MS);
+      const statusHTML = isOnline ? `<span style="color:#34d399;font-weight:700">🟢 Online</span>` : `<span style="color:#f87171;font-weight:700">🔴 Offline</span>`;
 
       const div = document.createElement("div");
       div.className = "list-item";
@@ -4037,10 +4067,11 @@ async function renderVisitorsAdmin() {
       div.style.alignItems = "center";
 
       const left = document.createElement("div");
+      left.style.flex = '1';
       left.innerHTML = `
-        <div style="font-weight:700">${escapeHTML(vid)}</div>
+        <div style="font-weight:700">${escapeHTML(vid)} <span style="margin-left:8px">${statusHTML}</span></div>
         <div class="small">IP: ${escapeHTML(v.ip || "unknown")}</div>
-        <div class="small">Seen: ${v.lastSeen ? new Date(v.lastSeen).toLocaleString() : "-"}</div>
+        <div class="small">Seen: ${lastSeenMs ? formatLastSeen12(lastSeenMs) : "-"}</div>
         <div class="small" style="color:#2563eb">${v.message ? "Admin → Visitor: " + escapeHTML(v.message) : ""}</div>
         <div class="small" style="color:#22c55e">${v.reply ? "Latest Visitor → Admin: " + escapeHTML(v.reply) : ""}</div>
       `;
@@ -4049,25 +4080,21 @@ async function renderVisitorsAdmin() {
       right.style.display = "flex";
       right.style.gap = "8px";
 
-      // message button (admin -> visitor)
       const msgBtn = document.createElement("button");
       msgBtn.className = "btn brand";
       msgBtn.textContent = "Message";
       msgBtn.onclick = () => sendMessageToVisitor(vid);
 
-      // view msgs button (open message history for this visitor)
       const viewBtn = document.createElement("button");
       viewBtn.className = "btn";
       viewBtn.textContent = "View Msgs";
       viewBtn.onclick = () => viewVisitorMessages(vid);
 
-      // delete visitor + their messages
       const delBtn = document.createElement("button");
       delBtn.className = "btn danger";
       delBtn.textContent = "Delete";
       delBtn.onclick = () => deleteVisitorAndMessages(vid);
 
-      // clear message button (legacy behavior)
       const clearBtn = document.createElement("button");
       clearBtn.className = "btn";
       clearBtn.textContent = "Clear Msg";
@@ -4087,11 +4114,15 @@ async function renderVisitorsAdmin() {
       div.appendChild(right);
       out.appendChild(div);
     });
+
   } catch (err) {
     console.error("renderVisitorsAdmin error", err);
     out.innerHTML = "<div class='small'>Failed to load visitors (see console).</div>";
   }
 }
+
+// expose for any inline uses
+window.renderVisitorsAdmin = renderVisitorsAdmin;
 
 // Open a small window and show all messages for a visitor (chronological)
 // Open a small window and show all messages for a visitor (chronological)
@@ -4532,6 +4563,7 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+
 
 
 
