@@ -4563,6 +4563,111 @@ async function viewUserScreen(username) {
   document.getElementById("streamUserLabel").textContent = username;
   document.getElementById("streamViewer").classList.remove("hidden");
 }
+// ===== UI enhancements wiring =====
+document.addEventListener('DOMContentLoaded', () => {
+  // 1) Theme: persist in localStorage
+  const themeToggle = document.getElementById('themeToggle');
+  const savedTheme = localStorage.getItem('ui_theme') || 'dark';
+  if(savedTheme === 'light') document.documentElement.classList.add('light');
+
+  if(themeToggle){
+    themeToggle.addEventListener('click', ()=> {
+      const isLight = document.documentElement.classList.toggle('light');
+      localStorage.setItem('ui_theme', isLight ? 'light' : 'dark');
+      themeToggle.textContent = isLight ? 'Light ✓' : 'Dark ✓';
+    });
+    // set initial text
+    themeToggle.textContent = document.documentElement.classList.contains('light') ? 'Light ✓' : 'Dark ✓';
+  }
+
+  // 2) Visitors online counter (uses sessions collection)
+  const visitorsCountEl = document.getElementById('visitorsCount');
+  const visitorsBadge = document.getElementById('visitorsBadge');
+  if(typeof onSnapshot === 'function' && typeof collection === 'function' && typeof db !== 'undefined'){
+    try {
+      const colRef = collection(db, 'sessions');
+      onSnapshot(colRef, snap => {
+        // count `updatedAt` within last 60 sec as "online"
+        const now = Date.now();
+        let count = 0;
+        snap.forEach(docSnap => {
+          const d = docSnap.data ? docSnap.data() : (docSnap.data || {});
+          const updated = d.updatedAt || d.updated_at || 0;
+          if(Number(updated) > now - 75_000) count++;
+        });
+        if(visitorsCountEl) visitorsCountEl.textContent = String(count);
+        if(visitorsBadge) visitorsBadge.style.display = (count > 0) ? 'inline-flex' : 'none';
+      }, err => {
+        // on error hide gracefully
+        if(visitorsCountEl) visitorsCountEl.textContent = '--';
+      });
+    } catch(e) {
+      if(visitorsCountEl) visitorsCountEl.textContent = '--';
+    }
+  } else {
+    if(visitorsCountEl) visitorsCountEl.textContent = '—';
+  }
+
+  // 3) Hook announcement listener so banner animates (you already have startAnnouncementsListenerForStudents)
+  try {
+    if(typeof startAnnouncementsListenerForStudents === 'function') startAnnouncementsListenerForStudents();
+    // make banner visible if it receives text (render logic in your code already updates #homeAnnouncement)
+    const homeAnn = document.getElementById('homeAnnouncement');
+    if(homeAnn){
+      // show when non-empty
+      const obs = new MutationObserver(()=> {
+        if(homeAnn.textContent && homeAnn.textContent.trim().length) {
+          homeAnn.style.display = 'block';
+        } else {
+          homeAnn.style.display = 'none';
+        }
+      });
+      obs.observe(homeAnn, { childList:true, subtree:true, characterData:true });
+    }
+  } catch(e){}
+
+  // 4) Demo quick check: show one sample question from local questions (or seeded ones)
+  const demoBtn = document.getElementById('demoBtn');
+  const demoModal = document.getElementById('demoModal');
+  const demoClose = document.getElementById('demoClose');
+  const demoQuestion = document.getElementById('demoQuestion');
+  const demoOptions = document.getElementById('demoOptions');
+
+  function showDemo() {
+    // pick first question from global `questions` if available, else fallback to sample
+    const q = (Array.isArray(window.questions) && window.questions.length) ? window.questions[0] : {
+      question: 'Sample: HTML stands for?',
+      options: ['Hyperlinks Text Markup','Home Tool Markup','Hyper Text Markup Language','Hyperlinking Text Markdown'],
+      answer: 2
+    };
+    demoQuestion.textContent = q.question || 'Demo question';
+    demoOptions.innerHTML = '';
+    (q.options || []).forEach((opt, i) => {
+      const b = document.createElement('button');
+      b.className = 'btn';
+      b.style.padding = '8px 12px';
+      b.style.borderRadius = '8px';
+      b.style.border = '1px solid rgba(255,255,255,0.06)';
+      b.textContent = opt;
+      b.addEventListener('click', ()=> {
+        if(i === (q.answer || 0)) {
+          b.textContent = '✅ Correct — ' + opt;
+          b.disabled = true;
+        } else {
+          b.textContent = '❌ Wrong — ' + opt;
+          b.disabled = true;
+        }
+      });
+      demoOptions.appendChild(b);
+    });
+    demoModal.style.display = 'flex';
+  }
+
+  if(demoBtn) demoBtn.addEventListener('click', showDemo);
+  if(demoClose) demoClose.addEventListener('click', ()=> demoModal.style.display = 'none');
+  // close on background click
+  if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
+});
 
 
 
