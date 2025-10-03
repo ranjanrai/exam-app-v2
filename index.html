@@ -364,6 +364,30 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
       <button id="homeLoginBtn" style="background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.06)); border:2px solid rgba(255,255,255,0.85); padding:12px 36px; border-radius:8px; font-size:18px; font-weight:600; cursor:pointer;">
         Login
       </button>
+      <!-- UI Extras (paste near the Login controls inside #home) -->
+<div style="margin-top:14px;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap">
+  <div id="visitorsBadge" title="Current visitors online">👥 <span id="visitorsCount">--</span> Online</div>
+
+  <button id="themeToggle" class="btn" style="padding:8px 12px;border-radius:999px;background:transparent;border:1px solid rgba(255,255,255,0.12);font-weight:700">
+    Toggle Theme
+  </button>
+
+  <button id="demoBtn" class="btn" style="padding:8px 12px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.12);font-weight:700">
+    Try Demo
+  </button>
+</div>
+
+<!-- Demo modal (simple) -->
+<div id="demoModal">
+  <div class="card" style="padding:18px;border-radius:12px;">
+    <h3 style="margin:0 0 8px">Demo Question</h3>
+    <div id="demoQuestion" style="margin-bottom:12px;font-weight:700">Loading...</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap" id="demoOptions"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+      <button id="demoClose" class="btn">Close</button>
+    </div>
+  </div>
+</div>
       <!-- paste inside <section id="home"> somewhere near the top -->
 <div id="homeAnnouncement"
      style="display:none; z-index:10002; max-width:1100px; margin:12px auto 0; padding:8px 12px;
@@ -871,6 +895,7 @@ window.startAnnouncementsListenerForStudents = startAnnouncementsListenerForStud
  <script src="app.js"></script>
 </body>
 </html>
+
 
 
 
