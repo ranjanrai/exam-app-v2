@@ -464,6 +464,85 @@ min-height:80px
   line-height: 28px !important;
 }
 
+/* ===== UI ENHANCEMENTS ===== */
+:root {
+  --ui-accent: #60a5fa;
+  --ui-bg-soft: rgba(255,255,255,0.03);
+  --glass: rgba(255,255,255,0.04);
+}
+
+/* Theme: light */
+html.light {
+  --bg: linear-gradient(180deg,#f5f8fb,#e6f0fa);
+  --panel: #ffffff;
+  --text: #062034;
+  --muted: #4b5563;
+  --brand: #2563eb;
+  --glass: rgba(2,6,23,0.04);
+}
+html.light body { color: var(--text); }
+
+/* Home card polished */
+#home .home-card {
+  border-radius: 14px;
+  padding: 28px 32px;
+  box-shadow: 0 18px 50px rgba(3,10,26,0.35);
+  transition: transform .28s ease, box-shadow .28s ease;
+  transform-origin: center;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+#home .home-card:hover { transform: translateY(-6px); box-shadow: 0 28px 80px rgba(3,10,26,0.45); }
+
+/* Login button micro-interaction */
+#homeLoginBtn {
+  transition: transform .12s ease, box-shadow .12s ease, opacity .18s ease;
+  will-change: transform;
+}
+#homeLoginBtn:active { transform: translateY(1px) scale(.997); }
+#homeLoginBtn:hover { box-shadow: 0 10px 24px rgba(2,6,23,0.18); }
+
+/* Announcement marquee */
+#homeAnnouncement {
+  display:none;
+  overflow:hidden;
+  white-space:nowrap;
+  text-overflow:ellipsis;
+  animation: annPulse 8s linear infinite;
+}
+@keyframes annPulse {
+  0%   { transform: translateX(0%); opacity: 1; }
+  50%  { transform: translateX(-2%); opacity: 0.96; }
+  100% { transform: translateX(0%); opacity: 1; }
+}
+
+/* Visitors badge */
+#visitorsBadge {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  border-radius:999px;
+  background:var(--glass);
+  font-weight:700;
+  font-size:13px;
+  color:var(--muted);
+  border:1px solid rgba(255,255,255,0.03);
+}
+
+/* Demo modal (simple) */
+#demoModal {
+  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background: rgba(2,6,23,0.6); z-index:10050;
+}
+#demoModal .card {
+  width:min(760px,94%); max-width:760px;
+}
+
+/* small responsive fix for home icons */
+@media (max-width:720px){
+  #home .home-card { padding:18px; }
+  #homeLoginBtn { width:100%; }
+}
 
 
 
