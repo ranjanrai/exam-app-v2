@@ -544,6 +544,106 @@ html.light body { color: var(--text); }
   #homeLoginBtn { width:100%; }
 }
 
+/* === Enhanced Admin Dashboard === */
+.admin-dashboard {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0a1425, #08111e);
+}
+
+/* Sidebar */
+.admin-sidebar {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.admin-sidebar h2 {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: var(--brand);
+}
+.admin-sidebar button {
+  background: transparent;
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  text-align: left;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.3s;
+}
+.admin-sidebar button:hover,
+.admin-sidebar button.active {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateX(6px);
+}
+
+/* Main Content */
+.admin-main {
+  padding: 24px;
+  overflow-y: auto;
+}
+.admin-main h1 {
+  font-size: 28px;
+  margin-bottom: 20px;
+  font-weight: 700;
+  color: var(--brand);
+}
+
+/* Dashboard Cards */
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 18px;
+}
+.dashboard-card {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(8px);
+  border-radius: 14px;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  transition: 0.3s;
+}
+.dashboard-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+.dashboard-card h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+  color: var(--brand);
+}
+.dashboard-card p {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* Responsive Fix */
+@media (max-width: 800px) {
+  .admin-dashboard {
+    grid-template-columns: 1fr;
+  }
+  .admin-sidebar {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .admin-sidebar button {
+    flex: 1;
+    text-align: center;
+  }
+}
+
 
 
 
