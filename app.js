@@ -1625,6 +1625,13 @@ async function submitExam(auto = false) {
     alert("⚠️ Failed to save results properly. Check console.");
   }
 
+  // ✅ Ensure exam never gets locked after submission
+EXAM.state.locked = false;
+EXAM.state.unlockedBy = "system";
+EXAM.state.unlockedAt = Date.now();
+
+
+
   // 🔹 Clear session so user cannot resume
   await _clearSessionAfterSubmit(EXAM.state.username);
   stopPeriodicSessionSave();
@@ -4668,6 +4675,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
