@@ -1592,38 +1592,54 @@ async function submitExam(auto = false) {
   // (optional) clear local cache only
   try { localStorage.removeItem("exam_session_" + EXAM.state.username); } catch(e){}
 
-  // 🧹 Hide any lock overlay that might still be visible
+// 🧹 Hide any lock overlay that might still be visible
 const lock = document.getElementById("lockScreen");
 if (lock) lock.style.display = "none";
 examPaused = false;
 
 // ✅ Mark that the exam has completely ended (global flag)
 window.examEnded = true;
-  
-  // 🎉 Show final score
-  $('#fsQuestion').innerHTML = `
-    <div style="text-align:center;font-size:22px;font-weight:900">
-      Your Score: ${percent}%
-    </div>
-    <div id="redirectMsg" style="text-align:center;margin-top:10px;font-size:14px;color:var(--muted)">
-      Redirecting in 5s...
-    </div>
-  `;
-  $('#fsOptions').innerHTML = `<div class="progress-bar"><div class="progress-fill" style="width:${percent}%"></div></div>`;
-  document.querySelectorAll('.fsFooter').forEach(el => el.style.display = 'flex');
 
-  let secs = 5;
-  const msgEl = document.getElementById('redirectMsg');
-  const countdown = setInterval(() => {
-    secs--;
-    msgEl.textContent = secs > 0 ? `Redirecting in ${secs}s...` : '';
-    if (secs <= 0) {
-      clearInterval(countdown);
-      $('#examFullscreen').style.display = 'none';
-      showSection('user');
-    }
-  }, 1000);
+// 🎉 Show final score and Login button
+$('#fsQuestion').innerHTML = `
+  <div style="text-align:center;font-size:22px;font-weight:900">
+    Your Score: ${percent}%
+  </div>
+  <div style="text-align:center;margin-top:10px;font-size:15px;color:var(--muted)">
+    You have successfully completed your exam.
+  </div>
+  <div style="text-align:center;margin-top:22px;">
+    <button id="goToLoginBtn" class="primary" style="
+      background: var(--brand);
+      border: none;
+      padding: 12px 26px;
+      border-radius: 8px;
+      color: #042033;
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;">
+      Go to Login Page
+    </button>
+  </div>
+`;
+
+$('#fsOptions').innerHTML = `
+  <div class="progress-bar">
+    <div class="progress-fill" style="width:${percent}%"></div>
+  </div>
+`;
+
+document.querySelectorAll('.fsFooter').forEach(el => el.style.display = 'flex');
+
+// 🚀 Button click handler to go back to login
+const loginBtn = document.getElementById('goToLoginBtn');
+if (loginBtn) {
+  loginBtn.addEventListener('click', () => {
+    $('#examFullscreen').style.display = 'none';
+    showSection('home'); // 👈 "home" is your login section ID
+  });
 }
+
 
 
 /* Close fullscreen and return to main page (reload to refresh admin view) */
@@ -4650,6 +4666,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
