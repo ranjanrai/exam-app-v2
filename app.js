@@ -1517,7 +1517,6 @@ async function submitExam(auto = false) {
   const MAX_ATTEMPTS = 1;
   const arr = await getResultsArray();
   const userAttempts = arr.filter(r => r.username === EXAM.state.username);
-
   if (userAttempts.length >= MAX_ATTEMPTS) {
     alert(`⚠️ User "${EXAM.state.username}" has already attempted the exam ${MAX_ATTEMPTS} time(s).`);
     $('#examFullscreen').style.display = 'none';
@@ -1526,6 +1525,8 @@ async function submitExam(auto = false) {
   }
 
   stopTimer();
+
+  // --- scoring logic (unchanged) ---
   const paper = EXAM.paper;
   let totalMarks = 0, earned = 0;
   const sectionScores = { 'Synopsis': 0, 'Minor Practical': 0, 'Major Practical': 0, 'Viva': 0 };
@@ -1533,24 +1534,10 @@ async function submitExam(auto = false) {
   paper.forEach(q => {
     totalMarks += (q.marks || 1);
     const chosen = EXAM.state.answers[q.id];
-
     if (q.category === "Major Practical") {
-      if (chosen === 0) { // A → full marks
-        earned += q.marks;
-        sectionScores[q.category] += q.marks;
-      }
-      else if (chosen === 1) { // B → 75%
-        const val = Math.round(q.marks * 0.75);
-        earned += val;
-        sectionScores[q.category] += val;
-      }
-      else if (chosen === 2) { // C → 50%
-        const val = Math.round(q.marks * 0.5);
-        earned += val;
-        sectionScores[q.category] += val;
-      } else {
-        // D → 0 marks
-      }
+      if (chosen === 0) { earned += q.marks; sectionScores[q.category] += q.marks; }
+      else if (chosen === 1) { const val = Math.round(q.marks * 0.75); earned += val; sectionScores[q.category] += val; }
+      else if (chosen === 2) { const val = Math.round(q.marks * 0.5); earned += val; sectionScores[q.category] += val; }
     } else {
       if (chosen === q.answer) {
         earned += (q.marks || 1);
@@ -1559,35 +1546,13 @@ async function submitExam(auto = false) {
     }
   });
 
-  // round marks before calculating percentage
   earned = Math.round(earned);
   Object.keys(sectionScores).forEach(k => { sectionScores[k] = Math.round(sectionScores[k]); });
-
   const percent = Math.round((earned / Math.max(1, totalMarks)) * 100);
 
-  // 🔹 Save results - synchronous flow (await each step so admin can see immediately)
+  // 🔹 Save results securely
   try {
-    // 1) Ensure results is an array in memory (load/decrypt if needed)
-    let currentResults = [];
-    if (Array.isArray(results)) {
-      currentResults = results;
-    } else {
-      // try to read + decrypt local storage
-      const stored = read(K_RESULTS, null);
-      if (stored) {
-        try {
-          currentResults = await decryptData(stored);
-          if (!Array.isArray(currentResults)) currentResults = [];
-        } catch (e) {
-          console.warn("Could not decrypt existing results from localStorage", e);
-          currentResults = [];
-        }
-      } else {
-        currentResults = [];
-      }
-    }
-
-    // 2) Create and push new record
+    let currentResults = Array.isArray(results) ? results : [];
     const record = {
       username: EXAM.state.username,
       totalScorePercent: percent,
@@ -1596,48 +1561,38 @@ async function submitExam(auto = false) {
     };
     currentResults.push(record);
 
-    // 3) Encrypt and persist to localStorage
     const encryptedResults = await encryptData(currentResults);
     write(K_RESULTS, encryptedResults);
+    try { await setDoc(doc(db, "results", "all"), { data: encryptedResults }); } catch {}
 
-    // 4) Save encrypted bundle to Firestore (attempt)
-    try {
-      await setDoc(doc(db, "results", "all"), { data: encryptedResults });
-      console.log("✅ Results synced to Firestore (encrypted)");
-    } catch (err) {
-      console.warn("❌ Firestore save error (results) - continuing offline only", err);
-    }
-
-    // 5) Update in-memory results variable so renderResults() uses the latest
     results = currentResults;
-
-    // 6) Refresh admin results UI (if admin is viewing)
-    if (typeof renderResults === 'function') {
-      try { renderResults(); } catch (err) { console.warn('renderResults() failed', err); }
-    }
-
-    // 7) (Optional) Auto-download backup as before
-    const filename = `results_${EXAM.state.username}_${Date.now()}.json`;
-    download(filename, JSON.stringify(encryptedResults, null, 2), 'application/json');
-
+    if (typeof renderResults === 'function') renderResults();
+    download(`results_${EXAM.state.username}_${Date.now()}.json`, JSON.stringify(encryptedResults, null, 2), 'application/json');
   } catch (err) {
     console.error("❌ Error while saving results:", err);
-    alert("⚠️ Failed to save results properly. Check console.");
   }
 
-  // ✅ Ensure exam never gets locked after submission
-EXAM.state.locked = false;
-EXAM.state.unlockedBy = "system";
-EXAM.state.unlockedAt = Date.now();
+  // ✅ Prevent lock or pause after submission
+  EXAM.state.submitted = true;
+  EXAM.state.locked = false;
+  EXAM.state.unlockedBy = "system";
+  EXAM.state.unlockedAt = Date.now();
 
-
-
-  // 🔹 Clear session so user cannot resume
-  await _clearSessionAfterSubmit(EXAM.state.username);
+  // 🛑 Stop any watchers or autosaves
+  try {
+    if (typeof stopSessionWatcher === 'function') stopSessionWatcher(EXAM.state.username);
+  } catch (e) { console.warn('stopSessionWatcher failed', e); }
   stopPeriodicSessionSave();
+  stopSessionHeartbeat(EXAM.state.username);
   stopExamStream();
 
-  // 🔹 Show score & redirect
+  // ✅ Save final unlocked state (do NOT delete session)
+  await saveSessionToFirestore(EXAM.state.username, EXAM.state, EXAM.paper);
+
+  // (optional) clear local cache only
+  try { localStorage.removeItem("exam_session_" + EXAM.state.username); } catch(e){}
+
+  // 🎉 Show final score
   $('#fsQuestion').innerHTML = `
     <div style="text-align:center;font-size:22px;font-weight:900">
       Your Score: ${percent}%
@@ -1647,23 +1602,21 @@ EXAM.state.unlockedAt = Date.now();
     </div>
   `;
   $('#fsOptions').innerHTML = `<div class="progress-bar"><div class="progress-fill" style="width:${percent}%"></div></div>`;
-
   document.querySelectorAll('.fsFooter').forEach(el => el.style.display = 'flex');
-  EXAM.state.submitted = true;
 
   let secs = 5;
   const msgEl = document.getElementById('redirectMsg');
   const countdown = setInterval(() => {
     secs--;
-    if (secs > 0) {
-      msgEl.textContent = `Redirecting in ${secs}s...`;
-    } else {
+    msgEl.textContent = secs > 0 ? `Redirecting in ${secs}s...` : '';
+    if (secs <= 0) {
       clearInterval(countdown);
       $('#examFullscreen').style.display = 'none';
       showSection('user');
     }
   }, 1000);
 }
+
 
 /* Close fullscreen and return to main page (reload to refresh admin view) */
 function closeFullscreen() { 
@@ -4675,6 +4628,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
