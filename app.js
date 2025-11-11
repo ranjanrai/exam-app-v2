@@ -833,9 +833,9 @@ async function saveSessionToFirestore(username, state = null, paper = null) {
       paperIds: paper ? paper.map(p => p.id) : (EXAM.paper ? EXAM.paper.map(p => p.id) : []),
       answers: state?.answers ?? EXAM.state?.answers ?? {},
       flags: state?.flags ?? EXAM.state?.flags ?? {},
-      locked: (state && state.hasOwnProperty('locked')) 
-                ? !!state.locked 
-                : !!(typeof examPaused !== 'undefined' && examPaused),
+      locked: (state && state.hasOwnProperty('locked'))
+          ? !!state.locked
+          : (!state?.submitted && !!(typeof examPaused !== 'undefined' && examPaused)),
       ip: EXAM.state.ip || "unknown"   // ✅ add IP here
     };
 
@@ -4675,6 +4675,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
