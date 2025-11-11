@@ -1644,6 +1644,7 @@ if (loginBtn) {
 
 /* Close fullscreen and return to main page (reload to refresh admin view) */
 function closeFullscreen() { 
+  if (window.examEnded) return;
   stopTimer(); 
   $('#examFullscreen').style.display = 'none'; 
   location.reload(); 
@@ -4666,6 +4667,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
