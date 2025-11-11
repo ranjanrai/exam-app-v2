@@ -1592,6 +1592,14 @@ async function submitExam(auto = false) {
   // (optional) clear local cache only
   try { localStorage.removeItem("exam_session_" + EXAM.state.username); } catch(e){}
 
+  // 🧹 Hide any lock overlay that might still be visible
+const lock = document.getElementById("lockScreen");
+if (lock) lock.style.display = "none";
+examPaused = false;
+
+// ✅ Mark that the exam has completely ended (global flag)
+window.examEnded = true;
+  
   // 🎉 Show final score
   $('#fsQuestion').innerHTML = `
     <div style="text-align:center;font-size:22px;font-weight:900">
@@ -3329,6 +3337,11 @@ document.addEventListener("fullscreenchange", () => {
 });
 
 async function pauseExam() {
+  if (EXAM?.state?.submitted) {
+  console.log("Exam already submitted — skip pause.");
+  return;
+}
+
   try {
     examPaused = true;
 
@@ -3552,25 +3565,34 @@ function shouldAutoLock() {
 function triggerAutoLock(reason) {
   try {
     console.log("Auto-lock triggered:", reason);
-    // if exam already paused/locked, ignore
+
+    // ✅ Ignore any auto-lock after exam submission
+    if (window.examEnded || EXAM?.state?.submitted) {
+      console.log("Exam submitted — auto-lock ignored.");
+      return;
+    }
+
+    // ✅ Skip if already paused
     if (!shouldAutoLock()) return;
-    // call existing pause logic (which should save locked:true and show lock screen)
-    // if you used a different name for pause handler, replace pauseExam() accordingly
+
+    // Proceed with normal pause
     if (typeof pauseExam === "function") {
       pauseExam();
     } else {
-      // fallback: set local flags + show lock UI + save session
       examPaused = true;
-      if (document.getElementById("lockScreen")) document.getElementById("lockScreen").style.display = "flex";
-      if (EXAM && EXAM.state && EXAM.state.username) {
-        saveSessionToFirestore(EXAM.state.username, { ...EXAM.state, locked: true }, EXAM.paper).catch(e=>console.warn(e));
+      const lock = document.getElementById("lockScreen");
+      if (lock) lock.style.display = "flex";
+      if (EXAM?.state?.username) {
+        saveSessionToFirestore(EXAM.state.username, { ...EXAM.state, locked: true }, EXAM.paper);
       }
-      startPausedSessionPolling();
     }
   } catch (e) {
     console.error("triggerAutoLock error:", e);
   }
 }
+
+
+
 
 // --------------- Event handlers ------------------
 
@@ -4628,6 +4650,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
