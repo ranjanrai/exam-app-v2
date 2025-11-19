@@ -3458,11 +3458,7 @@ function enterFullscreen(el) {
 }
 
 // detect exit fullscreen
-document.addEventListener("fullscreenchange", () => {
-  if (!document.fullscreenElement && !EXAM.state?.submitted) {
-    pauseExam();
-  }
-});
+
 
 async function pauseExam() {
   try {
@@ -4761,6 +4757,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
