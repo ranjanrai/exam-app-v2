@@ -1513,48 +1513,50 @@ if(i === EXAM.cur) {
 async function submitExam(auto = false) {
   if (!auto && !confirm('Submit exam now?')) return;
 
-  // 🔒 Limit attempts (max 1 per user)
   const MAX_ATTEMPTS = 1;
   const arr = await getResultsArray();
   const userAttempts = arr.filter(r => r.username === EXAM.state.username);
 
   if (userAttempts.length >= MAX_ATTEMPTS) {
     alert(`⚠️ User "${EXAM.state.username}" has already attempted the exam ${MAX_ATTEMPTS} time(s).`);
-    $('#examFullscreen').style.display = 'none';
+    document.getElementById('examFullscreen').style.display = 'none';
     showSection('user');
     return;
   }
 
-  // 🔹 Stop timers and session updates
+  // Stop all exam activity
   stopTimer();
   stopPeriodicSessionSave();
   stopExamStream();
 
   const paper = EXAM.paper;
   let totalMarks = 0, earned = 0;
-  const sectionScores = { 'Synopsis': 0, 'Minor Practical': 0, 'Major Practical': 0, 'Viva': 0 };
+  const sectionScores = {
+    'Synopsis': 0,
+    'Minor Practical': 0,
+    'Major Practical': 0,
+    'Viva': 0
+  };
 
-  // 🔹 Calculate marks
+  // MARKING LOGIC
   paper.forEach(q => {
     totalMarks += (q.marks || 1);
     const chosen = EXAM.state.answers[q.id];
 
     if (q.category === "Major Practical") {
-      if (chosen === 0) { // A → full marks
+      if (chosen === 0) {
         earned += q.marks;
         sectionScores[q.category] += q.marks;
-      }
-      else if (chosen === 1) { // B → 75%
+      } else if (chosen === 1) {
         const val = Math.round(q.marks * 0.75);
         earned += val;
         sectionScores[q.category] += val;
-      }
-      else if (chosen === 2) { // C → 50%
+      } else if (chosen === 2) {
         const val = Math.round(q.marks * 0.5);
         earned += val;
         sectionScores[q.category] += val;
       }
-      // D → 0 marks (do nothing)
+      // D → 0
     } else {
       if (chosen === q.answer) {
         earned += (q.marks || 1);
@@ -1563,15 +1565,13 @@ async function submitExam(auto = false) {
     }
   });
 
-  // round marks
   earned = Math.round(earned);
-  Object.keys(sectionScores).forEach(k => sectionScores[k] = Math.round(sectionScores[k]));
-
   const percent = Math.round((earned / Math.max(1, totalMarks)) * 100);
 
-  // 🔹 Save results (local + Firestore)
+  // SAVE RESULTS
   try {
     let currentResults = [];
+
     if (Array.isArray(results)) {
       currentResults = results;
     } else {
@@ -1592,18 +1592,20 @@ async function submitExam(auto = false) {
       sectionScores,
       timestamp: Date.now()
     };
-    currentResults.push(record);
 
+    currentResults.push(record);
     const encryptedResults = await encryptData(currentResults);
     write(K_RESULTS, encryptedResults);
 
     try {
       await setDoc(doc(db, "results", "all"), { data: encryptedResults });
-    } catch {}
+    } catch (err) {
+      console.warn("Firestore save error:", err);
+    }
 
     results = currentResults;
 
-    if (typeof renderResults === 'function') {
+    if (typeof renderResults === "function") {
       try { renderResults(); } catch {}
     }
 
@@ -1611,36 +1613,32 @@ async function submitExam(auto = false) {
     download(filename, JSON.stringify(encryptedResults, null, 2), 'application/json');
 
   } catch (err) {
-    console.error("❌ Error while saving results:", err);
-    alert("⚠️ Failed to save results properly. Check console.");
+    console.error("Error saving results:", err);
   }
 
-  // 🔹 Clear stored session so user cannot resume
+  // Clear exam session
   await _clearSessionAfterSubmit(EXAM.state.username);
 
-  // 🔹 Mark exam as submitted
   EXAM.state.submitted = true;
 
-  // 🔹 Show Score (NO REDIRECT)
-  $('#fsQuestion').innerHTML = `
+  // ==== SHOW SCORE ====
+  document.getElementById('fsQuestion').innerHTML = `
     <div style="text-align:center;font-size:22px;font-weight:900;">
       Your Score: ${percent}%
     </div>
     <div id="redirectMsg"
-         style="text-align:center;margin-top:12px;font-size:14px;color:var(--muted)">
-    </div>
+         style="text-align:center;margin-top:12px;font-size:14px;color:var(--muted)"></div>
   `;
 
-  $('#fsOptions').innerHTML = `
+  document.getElementById('fsOptions').innerHTML = `
     <div class="progress-bar">
       <div class="progress-fill" style="width:${percent}%"></div>
     </div>
   `;
 
-  // 🔹 Hide footer after submission
   document.querySelectorAll('.fsFooter').forEach(el => el.style.display = 'none');
 
-  // 🔹 Add "Go to Login" button
+  // ADD BUTTON
   const msgEl = document.getElementById("redirectMsg");
   msgEl.innerHTML = `
     <button id="goLoginBtn"
@@ -1662,6 +1660,7 @@ async function submitExam(auto = false) {
     showSection("user");
   };
 }
+
 
 
 
@@ -4765,6 +4764,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
