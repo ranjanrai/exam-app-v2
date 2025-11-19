@@ -1630,19 +1630,7 @@ async function submitExam(auto = false) {
   stopPeriodicSessionSave();
   stopExamStream();
 
-  // 🔹 Show score & redirect
-  $('#fsQuestion').innerHTML = `
-    <div style="text-align:center;font-size:22px;font-weight:900">
-      Your Score: ${percent}%
-    </div>
-    <div id="redirectMsg" style="text-align:center;margin-top:10px;font-size:14px;color:var(--muted)">
-      Redirecting in 5s...
-    </div>
-  `;
-  $('#fsOptions').innerHTML = `<div class="progress-bar"><div class="progress-fill" style="width:${percent}%"></div></div>`;
-
-  document.querySelectorAll('.fsFooter').forEach(el => el.style.display = 'flex');
-  EXAM.state.submitted = true;
+  
 
 // 🔹 STOP redirect — remove countdown
 // Clear the result message first
@@ -4772,6 +4760,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
