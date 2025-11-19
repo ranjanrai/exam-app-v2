@@ -1644,32 +1644,33 @@ async function submitExam(auto = false) {
   document.querySelectorAll('.fsFooter').forEach(el => el.style.display = 'flex');
   EXAM.state.submitted = true;
 
-// Remove redirect message
+// 🔹 STOP redirect — remove countdown
+// Clear the result message first
 const msgEl = document.getElementById('redirectMsg');
 msgEl.textContent = "";
 
-// Add button for user to return manually
+// 🔹 Add "Go to Login" button instead
 msgEl.innerHTML = `
   <button id="goLoginBtn"
-          style="
-            margin-top:15px;
-            padding:10px 20px;
-            font-size:16px;
-            font-weight:bold;
-            border-radius:10px;
-            background:#34d399;
-            color:#042033;
-            cursor:pointer;
-          ">
+    style="
+      margin-top:15px;
+      padding:10px 22px;
+      font-size:16px;
+      font-weight:bold;
+      border-radius:10px;
+      background:#34d399;
+      color:#042033;
+      cursor:pointer;">
     Go to Login
   </button>
 `;
 
-// Button handler
+// Button click → go back to login/home
 document.getElementById("goLoginBtn").onclick = () => {
   document.getElementById("examFullscreen").style.display = "none";
-  showSection("user"); // your login/home screen
+  showSection("user");
 };
+
 
 
 /* Close fullscreen and return to main page (reload to refresh admin view) */
@@ -4771,6 +4772,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
