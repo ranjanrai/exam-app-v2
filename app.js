@@ -1525,11 +1525,16 @@ async function submitExam(auto = false) {
     return;
   }
 
+  // 🔹 Stop timers and session updates
   stopTimer();
+  stopPeriodicSessionSave();
+  stopExamStream();
+
   const paper = EXAM.paper;
   let totalMarks = 0, earned = 0;
   const sectionScores = { 'Synopsis': 0, 'Minor Practical': 0, 'Major Practical': 0, 'Viva': 0 };
 
+  // 🔹 Calculate marks
   paper.forEach(q => {
     totalMarks += (q.marks || 1);
     const chosen = EXAM.state.answers[q.id];
@@ -1548,46 +1553,39 @@ async function submitExam(auto = false) {
         const val = Math.round(q.marks * 0.5);
         earned += val;
         sectionScores[q.category] += val;
-      } else {
-        // D → 0 marks
       }
+      // D → 0 marks (do nothing)
     } else {
       if (chosen === q.answer) {
         earned += (q.marks || 1);
-        sectionScores[q.category] = (sectionScores[q.category] || 0) + (q.marks || 1);
+        sectionScores[q.category] += (q.marks || 1);
       }
     }
   });
 
-  // round marks before calculating percentage
+  // round marks
   earned = Math.round(earned);
-  Object.keys(sectionScores).forEach(k => { sectionScores[k] = Math.round(sectionScores[k]); });
+  Object.keys(sectionScores).forEach(k => sectionScores[k] = Math.round(sectionScores[k]));
 
   const percent = Math.round((earned / Math.max(1, totalMarks)) * 100);
 
-  // 🔹 Save results - synchronous flow (await each step so admin can see immediately)
+  // 🔹 Save results (local + Firestore)
   try {
-    // 1) Ensure results is an array in memory (load/decrypt if needed)
     let currentResults = [];
     if (Array.isArray(results)) {
       currentResults = results;
     } else {
-      // try to read + decrypt local storage
       const stored = read(K_RESULTS, null);
       if (stored) {
         try {
           currentResults = await decryptData(stored);
           if (!Array.isArray(currentResults)) currentResults = [];
-        } catch (e) {
-          console.warn("Could not decrypt existing results from localStorage", e);
+        } catch {
           currentResults = [];
         }
-      } else {
-        currentResults = [];
       }
     }
 
-    // 2) Create and push new record
     const record = {
       username: EXAM.state.username,
       totalScorePercent: percent,
@@ -1596,27 +1594,19 @@ async function submitExam(auto = false) {
     };
     currentResults.push(record);
 
-    // 3) Encrypt and persist to localStorage
     const encryptedResults = await encryptData(currentResults);
     write(K_RESULTS, encryptedResults);
 
-    // 4) Save encrypted bundle to Firestore (attempt)
     try {
       await setDoc(doc(db, "results", "all"), { data: encryptedResults });
-      console.log("✅ Results synced to Firestore (encrypted)");
-    } catch (err) {
-      console.warn("❌ Firestore save error (results) - continuing offline only", err);
-    }
+    } catch {}
 
-    // 5) Update in-memory results variable so renderResults() uses the latest
     results = currentResults;
 
-    // 6) Refresh admin results UI (if admin is viewing)
     if (typeof renderResults === 'function') {
-      try { renderResults(); } catch (err) { console.warn('renderResults() failed', err); }
+      try { renderResults(); } catch {}
     }
 
-    // 7) (Optional) Auto-download backup as before
     const filename = `results_${EXAM.state.username}_${Date.now()}.json`;
     download(filename, JSON.stringify(encryptedResults, null, 2), 'application/json');
 
@@ -1625,39 +1615,54 @@ async function submitExam(auto = false) {
     alert("⚠️ Failed to save results properly. Check console.");
   }
 
-  // 🔹 Clear session so user cannot resume
+  // 🔹 Clear stored session so user cannot resume
   await _clearSessionAfterSubmit(EXAM.state.username);
-  stopPeriodicSessionSave();
-  stopExamStream();
 
-  
+  // 🔹 Mark exam as submitted
+  EXAM.state.submitted = true;
 
-// 🔹 STOP redirect — remove countdown
-// Clear the result message first
-const msgEl = document.getElementById('redirectMsg');
-msgEl.textContent = "";
+  // 🔹 Show Score (NO REDIRECT)
+  $('#fsQuestion').innerHTML = `
+    <div style="text-align:center;font-size:22px;font-weight:900;">
+      Your Score: ${percent}%
+    </div>
+    <div id="redirectMsg"
+         style="text-align:center;margin-top:12px;font-size:14px;color:var(--muted)">
+    </div>
+  `;
 
-// 🔹 Add "Go to Login" button instead
-msgEl.innerHTML = `
-  <button id="goLoginBtn"
-    style="
-      margin-top:15px;
-      padding:10px 22px;
-      font-size:16px;
-      font-weight:bold;
-      border-radius:10px;
-      background:#34d399;
-      color:#042033;
-      cursor:pointer;">
-    Go to Login
-  </button>
-`;
+  $('#fsOptions').innerHTML = `
+    <div class="progress-bar">
+      <div class="progress-fill" style="width:${percent}%"></div>
+    </div>
+  `;
 
-// Button click → go back to login/home
-document.getElementById("goLoginBtn").onclick = () => {
-  document.getElementById("examFullscreen").style.display = "none";
-  showSection("user");
-};
+  // 🔹 Hide footer after submission
+  document.querySelectorAll('.fsFooter').forEach(el => el.style.display = 'none');
+
+  // 🔹 Add "Go to Login" button
+  const msgEl = document.getElementById("redirectMsg");
+  msgEl.innerHTML = `
+    <button id="goLoginBtn"
+      style="
+        margin-top:15px;
+        padding:10px 22px;
+        font-size:16px;
+        font-weight:bold;
+        border-radius:10px;
+        background:#34d399;
+        color:#042033;
+        cursor:pointer;">
+      Go to Login
+    </button>
+  `;
+
+  document.getElementById("goLoginBtn").onclick = () => {
+    document.getElementById("examFullscreen").style.display = "none";
+    showSection("user");
+  };
+}
+
 
 
 
@@ -4760,6 +4765,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
