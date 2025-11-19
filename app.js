@@ -1644,19 +1644,33 @@ async function submitExam(auto = false) {
   document.querySelectorAll('.fsFooter').forEach(el => el.style.display = 'flex');
   EXAM.state.submitted = true;
 
-  let secs = 5;
-  const msgEl = document.getElementById('redirectMsg');
-  const countdown = setInterval(() => {
-    secs--;
-    if (secs > 0) {
-      msgEl.textContent = `Redirecting in ${secs}s...`;
-    } else {
-      clearInterval(countdown);
-      $('#examFullscreen').style.display = 'none';
-      showSection('user');
-    }
-  }, 1000);
-}
+// Remove redirect message
+const msgEl = document.getElementById('redirectMsg');
+msgEl.textContent = "";
+
+// Add button for user to return manually
+msgEl.innerHTML = `
+  <button id="goLoginBtn"
+          style="
+            margin-top:15px;
+            padding:10px 20px;
+            font-size:16px;
+            font-weight:bold;
+            border-radius:10px;
+            background:#34d399;
+            color:#042033;
+            cursor:pointer;
+          ">
+    Go to Login
+  </button>
+`;
+
+// Button handler
+document.getElementById("goLoginBtn").onclick = () => {
+  document.getElementById("examFullscreen").style.display = "none";
+  showSection("user"); // your login/home screen
+};
+
 
 /* Close fullscreen and return to main page (reload to refresh admin view) */
 function closeFullscreen() { 
@@ -4757,6 +4771,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
