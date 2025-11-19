@@ -2675,17 +2675,39 @@ async function adminForceClearSession(sessionId) {
 }
 // Permanently delete a saved session doc (admin action)
 async function adminDeleteSession(sessionId) {
-  if (!confirm(`Permanently DELETE session for "${sessionId}"? This cannot be undone.`)) return;
+  if (!confirm(`DELETE session "${sessionId}"?\nA backup copy will be saved.`)) return;
+
   try {
-    await deleteDoc(doc(db, "sessions", sessionId));
-    alert("Session deleted.");
+    const ref = doc(db, "sessions", sessionId);
+    const snap = await getDoc(ref);
+
+    if (snap.exists()) {
+      const data = snap.data();
+
+      // Save backup with timestamp
+      await setDoc(
+        doc(db, "sessions_backup", `${sessionId}_${Date.now()}`),
+        {
+          ...data,
+          deletedAt: Date.now(),
+          originalId: sessionId
+        }
+      );
+    }
+
+    // Now delete the live session
+    await deleteDoc(ref);
+
+    alert("Session deleted and backed up.");
     renderSessionsAdmin();
+
   } catch (err) {
     console.error("adminDeleteSession error:", err);
-    alert("Failed to delete session (see console).");
+    alert("Error deleting session (see console)");
   }
 }
 window.adminDeleteSession = adminDeleteSession;
+
 
 
 // Clear all sessions (danger)
@@ -2707,38 +2729,40 @@ async function clearAllSessions() {
 }
 // 🔴 Bulk DELETE all session documents
 async function deleteAllSessions() {
-  if (!confirm('Permanently DELETE ALL live sessions? This will remove all records from "sessions" collection.')) {
-    return;
-  }
+  if (!confirm("DELETE ALL LIVE SESSIONS?\nBackup copies will be saved.")) return;
 
   try {
-    if (typeof getDocs !== 'function' || typeof collection !== 'function' ||
-        typeof deleteDoc !== 'function' || typeof doc !== 'function' || typeof db === 'undefined') {
-      alert('Firestore helpers not available. Cannot delete sessions.');
-      return;
-    }
-
     const snap = await getDocs(collection(db, "sessions"));
-    if (snap.empty) {
-      alert('No sessions found to delete.');
-      return;
-    }
-
     let count = 0;
+
     for (const d of snap.docs) {
+      const data = d.data();
+
+      // Save backup first
+      await setDoc(
+        doc(db, "sessions_backup", `${d.id}_${Date.now()}`),
+        {
+          ...data,
+          deletedAt: Date.now(),
+          originalId: d.id
+        }
+      );
+
+      // Then delete the live session
       await deleteDoc(doc(db, "sessions", d.id));
       count++;
     }
 
-    alert(`✅ Deleted ${count} live session(s) from Firestore.`);
-    if (typeof renderSessionsAdmin === 'function') renderSessionsAdmin();
+    alert(`Deleted ${count} sessions with backup saved.`);
+    renderSessionsAdmin();
 
   } catch (err) {
-    console.error('deleteAllSessions error:', err);
-    alert('❌ Failed to delete all sessions (see console).');
+    console.error("deleteAllSessions error:", err);
+    alert("Error deleting all sessions.");
   }
 }
-window.deleteAllSessions = deleteAllSessions;  // expose globally for onclick
+window.deleteAllSessions = deleteAllSessions;
+
 
 
   // Admin: remote-unlock a student's session (clears the locked flag)
@@ -4740,6 +4764,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
