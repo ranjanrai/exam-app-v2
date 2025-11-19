@@ -1988,7 +1988,7 @@ function renderUsersAdmin(){
 async function renderSessionsAdmin() {
   try {
     const snap = await getDocs(collection(db, "sessions"));
-    const out = document.getElementById("sessionsList");
+    const out = document.getElementById("adminSessionsList");
     if (!out) return;
 
     out.innerHTML = "<div class='small'>Loading…</div>";
@@ -4740,6 +4740,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
