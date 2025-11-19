@@ -1991,7 +1991,8 @@ async function renderSessionsAdmin() {
     const out = document.getElementById("sessionsList");
     if (!out) return;
 
-    // Collect docs, keep only valid data, normalize remainingMs to Number
+    out.innerHTML = "<div class='small'>Loading…</div>";
+
     const arr = snap.docs
       .map(d => {
         const data = d.data();
@@ -2000,15 +2001,14 @@ async function renderSessionsAdmin() {
           id: d.id,
           remainingMs: Number(data.remainingMs ?? 0),
           submitted: !!data.submitted,
-          // copy other fields if needed: ...data
+          locked: !!data.locked,
+          resumes: Number(data.resumes || 0),
+          updatedAt: Number(data.updatedAt || 0),
           ...data
         };
       })
       .filter(Boolean)
-      // only active, not yet submitted sessions
-      .filter(s => s.remainingMs > 0 && !s.submitted)
-      // sort by remaining time ascending (soonest to finish first)
-      .sort((a, b) => a.remainingMs - b.remainingMs);
+      .sort((a, b) => b.updatedAt - a.updatedAt);
 
     out.innerHTML = "";
 
@@ -2017,57 +2017,92 @@ async function renderSessionsAdmin() {
       return;
     }
 
-    // Use a fragment for better performance on many items
     const frag = document.createDocumentFragment();
 
-    arr.forEach(s => {
-      const div = document.createElement("div");
-      div.className = "list-item";
+    arr.forEach(sess => {
+      const row = document.createElement("div");
+      row.className = "list-item";
+      row.style.display = "flex";
+      row.style.justifyContent = "space-between";
+      row.style.alignItems = "center";
 
-      // left column: id + minutes left — use textContent to avoid XSS
+      // LEFT SIDE — ID + Time
       const left = document.createElement("div");
       left.style.flex = "1";
 
-      const idEl = document.createElement("b");
-      idEl.textContent = s.id;
+      const b = document.createElement("b");
+      b.textContent = sess.id;
 
-      const mins = Math.max(0, Math.round((s.remainingMs || 0) / 60000));
+      const mins = Math.max(0, Math.round((sess.remainingMs || 0) / 60000));
       const small = document.createElement("span");
       small.className = "small";
       small.textContent = ` • ${mins} min left`;
 
-      left.appendChild(idEl);
+      left.appendChild(b);
       left.appendChild(small);
 
-      // watch button (safer than inline onclick string)
-      const btn = document.createElement("button");
-      btn.className = "btn brand";
-      btn.type = "button";
-      btn.textContent = "👀 Watch";
-      btn.addEventListener("click", () => {
-        if (typeof watchLiveSession === "function") {
-          watchLiveSession(s.id);
-        } else {
-          console.warn("watchLiveSession is not defined");
-        }
-      });
+      // RIGHT SIDE — ACTION BUTTONS
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.gap = "6px";
 
-      div.appendChild(left);
-      div.appendChild(btn);
+      // View
+      const viewBtn = document.createElement("button");
+      viewBtn.className = "btn";
+      viewBtn.textContent = "View";
+      viewBtn.onclick = () => adminViewSession(sess.id);
+      actions.appendChild(viewBtn);
 
-      frag.appendChild(div);
+      // Clear
+      const clearBtn = document.createElement("button");
+      clearBtn.className = "btn";
+      clearBtn.textContent = "Clear";
+      clearBtn.onclick = () => adminForceClearSession(sess.id);
+      actions.appendChild(clearBtn);
+
+      // Delete
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn danger";
+      delBtn.textContent = "Delete";
+      delBtn.onclick = () => adminDeleteSession(sess.id);
+      actions.appendChild(delBtn);
+
+      // Unlock
+      if (sess.locked) {
+        const unlock = document.createElement("button");
+        unlock.className = "btn brand";
+        unlock.textContent = "Unlock";
+        unlock.onclick = () => adminUnlockSession(sess.id);
+        actions.appendChild(unlock);
+      }
+
+      // Enable Resume
+      if (sess.resumes >= 2 || sess.locked) {
+        const enable = document.createElement("button");
+        enable.className = "btn";
+        enable.textContent = "Enable Resume";
+        enable.onclick = () => adminEnableResume(sess.id);
+        actions.appendChild(enable);
+      }
+
+      // Add to row
+      row.appendChild(left);
+      row.appendChild(actions);
+
+      frag.appendChild(row);
     });
 
     out.appendChild(frag);
 
   } catch (err) {
-    console.warn("renderSessionsAdmin error", err);
-    // show a visible message in UI so admins know something went wrong
+    console.error("renderSessionsAdmin error", err);
     const out = document.getElementById("sessionsList");
-    if (out) out.innerHTML = `<div class="small">Error loading sessions (see console)</div>`;
+    if (out) out.innerHTML = `<div class="small">Error loading sessions</div>`;
   }
 }
+
 window.renderSessionsAdmin = renderSessionsAdmin;
+
 
 function watchLiveSession(username) {
   alert("🔴 Opening live feed for " + username);
@@ -2650,7 +2685,8 @@ async function adminDeleteSession(sessionId) {
     alert("Failed to delete session (see console).");
   }
 }
-window.adminDeleteSession = adminDeleteSession; // expose globally for inline onclicks
+window.adminDeleteSession = adminDeleteSession;
+
 
 // Clear all sessions (danger)
 async function clearAllSessions() {
@@ -2669,29 +2705,41 @@ async function clearAllSessions() {
     alert('Failed to clear sessions (see console).');
   }
 }
-// 🔥 Permanently delete ALL session documents
-async function bulkDeleteSessions() {
-  if (!confirm("⚠️ Permanently DELETE ALL session records?\nThis cannot be undone.")) return;
+// 🔴 Bulk DELETE all session documents
+async function deleteAllSessions() {
+  if (!confirm('Permanently DELETE ALL live sessions? This will remove all records from "sessions" collection.')) {
+    return;
+  }
 
   try {
-    const snap = await getDocs(collection(db, "sessions"));
-    let count = 0;
+    if (typeof getDocs !== 'function' || typeof collection !== 'function' ||
+        typeof deleteDoc !== 'function' || typeof doc !== 'function' || typeof db === 'undefined') {
+      alert('Firestore helpers not available. Cannot delete sessions.');
+      return;
+    }
 
+    const snap = await getDocs(collection(db, "sessions"));
+    if (snap.empty) {
+      alert('No sessions found to delete.');
+      return;
+    }
+
+    let count = 0;
     for (const d of snap.docs) {
       await deleteDoc(doc(db, "sessions", d.id));
       count++;
     }
 
-    alert(`🗑 Deleted ${count} session(s) permanently.`);
-    renderSessionsAdmin();
+    alert(`✅ Deleted ${count} live session(s) from Firestore.`);
+    if (typeof renderSessionsAdmin === 'function') renderSessionsAdmin();
 
   } catch (err) {
-    console.error("bulkDeleteSessions error:", err);
-    alert("❌ Failed to delete all sessions. Check console for details.");
+    console.error('deleteAllSessions error:', err);
+    alert('❌ Failed to delete all sessions (see console).');
   }
 }
+window.deleteAllSessions = deleteAllSessions;  // expose globally for onclick
 
-window.bulkDeleteSessions = bulkDeleteSessions;
 
   // Admin: remote-unlock a student's session (clears the locked flag)
 async function adminUnlockSession(sessionId) {
@@ -4692,6 +4740,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
