@@ -2669,6 +2669,30 @@ async function clearAllSessions() {
     alert('Failed to clear sessions (see console).');
   }
 }
+// 🔥 Permanently delete ALL session documents
+async function bulkDeleteSessions() {
+  if (!confirm("⚠️ Permanently DELETE ALL session records?\nThis cannot be undone.")) return;
+
+  try {
+    const snap = await getDocs(collection(db, "sessions"));
+    let count = 0;
+
+    for (const d of snap.docs) {
+      await deleteDoc(doc(db, "sessions", d.id));
+      count++;
+    }
+
+    alert(`🗑 Deleted ${count} session(s) permanently.`);
+    renderSessionsAdmin();
+
+  } catch (err) {
+    console.error("bulkDeleteSessions error:", err);
+    alert("❌ Failed to delete all sessions. Check console for details.");
+  }
+}
+
+window.bulkDeleteSessions = bulkDeleteSessions;
+
   // Admin: remote-unlock a student's session (clears the locked flag)
 async function adminUnlockSession(sessionId) {
   if (!confirm(`Unlock session for "${sessionId}"? This will allow the student to resume.`)) return;
@@ -4668,6 +4692,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
