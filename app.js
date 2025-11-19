@@ -3710,26 +3710,24 @@ function triggerAutoLock(reason) {
 
 // --------------- Event handlers ------------------
 
-// 1) Detect leaving fullscreen (most browsers fire this when user presses ESC, or window loses fullscreen)
+// 1) Detect leaving fullscreen 
 document.addEventListener("fullscreenchange", () => {
-  // If we left fullscreen and exam is running -> lock
-  if (!document.fullscreenElement) {
+  if (!document.fullscreenElement && !EXAM.state?.submitted) {
     triggerAutoLock("fullscreenchange: left fullscreen");
   }
 });
 
 // 2) Detect visibility change (tab switch / minimize / lock-screen)
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
+  if (document.hidden && !EXAM.state?.submitted) {
     triggerAutoLock("visibilitychange: document.hidden");
   }
 });
 
-// 3) Window blur — user clicked outside window or switched app (mobile or desktop)
+// 3) Window blur — user clicked outside window or switched app
 window.addEventListener("blur", () => {
-  // small timeout to avoid false positives from brief focus shifts
   setTimeout(() => {
-    if (document.hasFocus && !document.hasFocus()) {
+    if (!EXAM.state?.submitted && document.hasFocus && !document.hasFocus()) {
       triggerAutoLock("window.blur: lost focus");
     }
   }, 150);
@@ -3737,38 +3735,37 @@ window.addEventListener("blur", () => {
 
 // 4) Pagehide / beforeunload — attempts to close or reload
 window.addEventListener("pagehide", (e) => {
-  // pagehide occurs when navigating away or closing tab
-  triggerAutoLock("pagehide");
+  if (!EXAM.state?.submitted) {
+    triggerAutoLock("pagehide");
+  }
 });
 
-// beforeunload: can't perform async writes reliably, but we still trigger local lock UI
+// beforeunload: don't lock if exam is already submitted
 window.addEventListener("beforeunload", (e) => {
-  if (!shouldAutoLock()) return;
-  // show lock UI and save synchronous minimal state
+  if (!shouldAutoLock() || EXAM.state?.submitted) return;
+
   try {
-    if (EXAM && EXAM.state && EXAM.state.username) {
-      // best-effort save; this is synchronous-ish so keep small
+    if (EXAM?.state?.username) {
       navigator.sendBeacon && typeof navigator.sendBeacon === "function" && (() => {
         try {
-          // If you have an API endpoint to save session quickly, use sendBeacon there.
-          // Fallback: still call saveSessionToFirestore but it may not complete before unload.
-          saveSessionToFirestore(EXAM.state.username, { ...EXAM.state, locked: true }, EXAM.paper).catch(()=>{});
+          saveSessionToFirestore(
+            EXAM.state.username,
+            { ...EXAM.state, locked: true },
+            EXAM.paper
+          ).catch(()=>{});
         } catch(e){}
       })();
     }
   } catch(e) {}
-  // Custom message not allowed in many browsers; still we can prompt to stop navigation:
-  // e.returnValue = "Are you sure you want to leave the exam? Leaving will lock your session.";
-  // return e.returnValue;
 });
 
-// 5) Optional: Detect long pointer leave (mouse leaving window) — useful for desktops
+// 5) Detect pointer leaving window (desktop only)
 document.addEventListener("mouseleave", (e) => {
-  // only when pointer leaves window viewport at top (possible closing devtools/window)
   if (e.clientY <= 0) {
-    // slight debounce
     setTimeout(() => {
-      if (!document.fullscreenElement && shouldAutoLock()) triggerAutoLock("mouseleave: top edge");
+      if (!EXAM.state?.submitted && !document.fullscreenElement && shouldAutoLock()) {
+        triggerAutoLock("mouseleave: top edge");
+      }
     }, 120);
   }
 });
@@ -4764,6 +4761,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+
 
 
 
