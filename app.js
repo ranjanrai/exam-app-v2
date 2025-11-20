@@ -218,12 +218,7 @@ if(!adminCred) write(K_ADMIN,
 
 if(questions.length === 0){
   // seed sample questions
-  questions = [
-    { id: uid(), question: 'HTML stands for?', options: ['Hyperlinks Text Markup','Home Tool Markup','Hyper Text Markup Language','Hyperlinking Text Markdown'], answer: 2, marks: 1, category: 'Synopsis' },
-    { id: uid(), question: 'Which tag defines paragraph?', options: ['<p>','<para>','<pg>','<par>'], answer: 0, marks: 1, category: 'Minor Practical' },
-    { id: uid(), question: 'Which method adds to array end?', options: ['push','pop','shift','unshift'], answer: 0, marks: 2, category: 'Major Practical' },
-    { id: uid(), question: 'Does localStorage persist after browser restart?', options: ['Yes','No','Sometimes','Depends'], answer: 0, marks: 1, category: 'Viva' }
-  ];
+  questions = [];// keep empty
   write(K_QS, questions);
 }
 function downloadBackup() {
@@ -4840,4 +4835,5 @@ async function deleteAllQuestions() {
 }
 
 window.deleteAllQuestions = deleteAllQuestions;
+
 
