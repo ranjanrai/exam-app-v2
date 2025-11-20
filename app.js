@@ -216,11 +216,11 @@ let screenShareEnabled = false;
 if(!adminCred) write(K_ADMIN,
                      MASTER_ADMIN);
 
-if(questions.length === 0){
-  // seed sample questions
-  questions = [];// keep empty
-  write(K_QS, questions);
+// 🚫 Disable seeding of default sample questions
+if (questions.length === 0) {
+  // Do nothing — keep question bank empty
 }
+
 function downloadBackup() {
   const backup = {
     users,
@@ -4835,5 +4835,6 @@ async function deleteAllQuestions() {
 }
 
 window.deleteAllQuestions = deleteAllQuestions;
+
 
 
