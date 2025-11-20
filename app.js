@@ -4764,29 +4764,41 @@ document.addEventListener('DOMContentLoaded', () => {
   // close on background click
   if(demoModal) demoModal.addEventListener('click', (ev)=> { if(ev.target === demoModal) demoModal.style.display = 'none'; });
 });
+async function deleteAllQuestions() {
+  if (!confirm('⚠️ Delete ALL questions?\nThis will wipe local & Firestore data.')) return;
 
+  try {
+    // 1) Clear in-memory list
+    questions = [];
 
+    // 2) Clear localStorage
+    write(K_QS, questions);
 
+    // 3) Delete all docs from Firestore: questions/*
+    const ready = await (window._firestoreReadyPromise || Promise.resolve(false));
 
+    if (ready && typeof getDocs === 'function' && typeof deleteDoc === 'function') {
+      const snap = await getDocs(collection(db, "questions"));
 
+      const batchDeletes = [];
+      snap.forEach(d => {
+        batchDeletes.push(deleteDoc(doc(db, "questions", d.id)));
+      });
 
+      await Promise.all(batchDeletes);
+      console.log("🔥 All Firestore questions deleted");
+    } else {
+      console.warn("Firestore not ready — skipped cloud delete");
+    }
 
+    // 4) Refresh UI
+    if (typeof renderQuestionsList === "function") renderQuestionsList();
+    alert("✅ All questions deleted.");
 
+  } catch (err) {
+    console.error("Delete all failed:", err);
+    alert("❌ Failed. See console.");
+  }
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+window.deleteAllQuestions = deleteAllQuestions;
