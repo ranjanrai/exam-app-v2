@@ -2124,7 +2124,45 @@ function watchLiveSession(username) {
 window.watchLiveSession = watchLiveSession;
 
 
-function adminClearUsers(){ if(!confirm('Delete ALL users?')) return; users = []; write(K_USERS, users); renderUsersAdmin(); }
+async function adminClearUsers() {
+  if (!confirm("⚠️ Delete ALL users (except admin)? This cannot be undone.")) return;
+
+  try {
+    // 1) Keep only admin locally
+    users = users.filter(u => u.username === "admin");
+    write(K_USERS, users);
+
+    // 2) Delete all Firestore users except admin
+    if (typeof getDocs === "function" && typeof deleteDoc === "function") {
+      const snap = await getDocs(collection(db, "users"));
+      const deletions = [];
+
+      snap.forEach(docSnap => {
+        const data = docSnap.data();
+        if (!data) return;
+
+        // protect admin
+        if (data.username === "admin") return;
+
+        deletions.push(deleteDoc(doc(db, "users", docSnap.id)));
+      });
+
+      await Promise.all(deletions);
+      console.log("🔥 Deleted all Firestore users except admin");
+    }
+
+    // 3) Refresh UI
+    renderUsersAdmin();
+
+    alert("✅ All users deleted (admin kept).");
+
+  } catch (err) {
+    console.error("adminClearUsers error:", err);
+    alert("❌ Failed. Check console.");
+  }
+}
+window.adminClearUsers = adminClearUsers;
+ }
 
 /* Results admin */
 // Replace existing renderResults() with this improved version
@@ -4802,3 +4840,4 @@ async function deleteAllQuestions() {
 }
 
 window.deleteAllQuestions = deleteAllQuestions;
+
