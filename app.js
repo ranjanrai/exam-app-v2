@@ -1604,8 +1604,11 @@ async function submitExam(auto = false) {
       try { renderResults(); } catch {}
     }
 
-    const filename = `results_${EXAM.state.username}_${Date.now()}.json`;
-    download(filename, JSON.stringify(encryptedResults, null, 2), 'application/json');
+    if (isAdmin) {
+  const filename = `results_${EXAM.state.username}_${Date.now()}.json`;
+  download(filename, JSON.stringify(encryptedResults, null, 2), 'application/json');
+}
+
 
   } catch (err) {
     console.error("Error saving results:", err);
@@ -4962,6 +4965,7 @@ async function deleteSingleResult(username) {
   }
 }
 window.deleteSingleResult = deleteSingleResult;
+
 
 
 
